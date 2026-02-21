@@ -278,6 +278,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ------------------------------
   // 応募処理
   // ------------------------------
+  
   async function onJobsListClick(e) {
     const button = e.target.closest(".apply-button");
     if (!button) return;
@@ -285,11 +286,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const jobId = button.dataset.jobId;
     if (!jobId) return;
 
+    // メールアドレスを入力させる
+    const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
+
+    // キャンセルまたは未入力
+    if (contactEmail === null) return;
+    if (!contactEmail.trim()) {
+      alert("メールアドレスを入力してください。");
+      return;
+    }
+
+    // 簡易バリデーション
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
+      alert("正しいメールアドレスを入力してください。");
+      return;
+    }
+
     button.disabled = true;
 
     try {
       const data = await jsonpRequest(
-        { action: "apply", token: state.session.token, jobId },
+        { action: "apply", token: state.session.token, jobId, contactEmail: contactEmail.trim() },
         apiTimeoutMs
       );
 
@@ -306,6 +323,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       state.appliedJobIds.add(jobId);
       renderJobs();
+      alert("応募が完了しました。確認メールをご確認ください。");
 
     } catch (err) {
       console.error(err);
