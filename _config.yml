@@ -1,0 +1,15 @@
+title: Menu Talent Site
+description: Talent matching site generated with Jekyll and GitHub Pages
+lang: ja
+timezone: Asia/Tokyo
+markdown: kramdown
+permalink: pretty
+exclude:
+  - README.md
+  - firebase.json
+  - .firebaserc
+  - firestore.rules
+  - firestore.indexes.json
+  - functions
+  - scripts
+  - apps-script

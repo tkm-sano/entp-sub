@@ -1,0 +1,302 @@
+:root {
+  --bg: #ffffff;
+  --card: #ffffff;
+  --text: #000000;
+  --muted: #000000;
+  --line: #bcbcbc;
+  --brand: #000000;
+  --brand-soft: #ffffff;
+  --warn: #000000;
+  --warn-soft: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+
+.container {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+}
+
+.site-header {
+  padding: 2.5rem 0 1.5rem;
+  background: #ffffff;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+}
+
+.subtitle {
+  margin-top: 0.6rem;
+  color: var(--muted);
+}
+
+.site-footer {
+  padding: 2rem 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.2rem;
+  margin-bottom: 1rem;
+  box-shadow: none;
+}
+
+.login-panel {
+  width: min(360px, 92vw);
+  margin: 5rem auto 0;
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.login-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+}
+
+.login-form-min {
+  width: 100%;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+}
+
+.login-form-min label {
+  width: 100%;
+}
+
+.login-form-min input,
+.login-form-min button {
+  width: 100%;
+}
+
+.hidden {
+  display: none;
+}
+
+.muted {
+  margin-top: 0.4rem;
+  color: var(--muted);
+}
+
+.auth-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.form-card {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  background: #ffffff;
+  justify-items: center;
+}
+
+.single-form {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  justify-items: center;
+  text-align: center;
+}
+
+input,
+select,
+button,
+textarea {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: #fff;
+  color: #000;
+  text-align: center;
+}
+
+button {
+  border: 1px solid #000;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  background: #fff;
+  color: #000;
+}
+
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.account-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.jobs-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.jobs-count {
+  margin: 0;
+  color: var(--muted);
+}
+
+.filters {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  justify-items: center;
+  text-align: center;
+}
+
+.system-message {
+  min-height: 1.4rem;
+  margin-top: 0.9rem;
+  color: var(--muted);
+}
+
+body[data-page="login"] .system-message {
+  min-height: 0;
+}
+
+.system-message:empty {
+  display: none;
+}
+
+.system-message.error {
+  color: #000;
+}
+
+.system-message.success {
+  color: #000;
+}
+
+.jobs-list {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  justify-items: center;
+}
+
+.job-card {
+  border: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem;
+  background: #fff;
+  width: min(900px, 100%);
+  text-align: center;
+}
+
+.job-head {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.job-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--brand-soft);
+  color: #000;
+  border: 1px solid #000;
+}
+
+.badge.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.job-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.6rem 0;
+  text-align: center;
+}
+
+.job-description {
+  margin: 0.6rem 0 0.9rem;
+  white-space: pre-wrap;
+}
+
+.job-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.tag {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 0.18rem 0.55rem;
+  font-size: 0.78rem;
+  color: #000;
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  .account-row,
+  .job-actions {
+    align-items: center;
+  }
+
+  .account-row button,
+  .job-actions button {
+    width: auto;
+  }
+}
