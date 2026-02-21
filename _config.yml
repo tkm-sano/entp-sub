@@ -4,6 +4,8 @@ lang: ja
 timezone: Asia/Tokyo
 markdown: kramdown
 permalink: pretty
+# GitHub Pages用の設定を追加
+baseurl: "/entp-sub"
 exclude:
   - README.md
   - firebase.json
