@@ -5,20 +5,19 @@ page_id: jobs
 ---
 
 <section id="jobs-panel">
-  <p>
+  <div class="account-row">
     <button id="logout-button" type="button">ログアウト</button>
-  </p>
+  </div>
 
   <div class="jobs-header">
-    <div>
-      <h2>案件一覧</h2>
-    </div>
+    <h2>案件一覧</h2>
     <p id="jobs-count" class="jobs-count"></p>
+  </div>
 
   <div class="filters" id="filters">
     <label>
       キーワード
-      <input type="search" id="search-input" placeholder="案件名・説明・勤務地" />
+      <input type="search" id="search-input" placeholder="案件名・説明" />
     </label>
     <label>
       カテゴリ
@@ -38,4 +37,5 @@ page_id: jobs
 
   <p id="jobs-message" class="system-message"></p>
   <div id="jobs-list" class="jobs-list"></div>
+
 </section>
