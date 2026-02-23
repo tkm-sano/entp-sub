@@ -1,7 +1,3 @@
-// ------------------------------
-// main.js 初期化完全版（JSONP対応）
-// ------------------------------
-
 document.addEventListener("DOMContentLoaded", () => {
   if (!window.MENU_TALENT_API_URL) {
     console.error("env.js が読み込まれていないか、API URL が未設定です。");
@@ -10,11 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const pageId = document.body?.dataset?.page || "default";
-  const routes = window.MENU_TALENT_ROUTES || {
-    login: "/",
-    jobs: "/jobs/"
-  };
-
+  const routes = window.MENU_TALENT_ROUTES || { login: "/", jobs: "/jobs/" };
   const apiUrl = String(window.MENU_TALENT_API_URL || "").trim();
   const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
   const isConfigured = apiUrl && !apiUrl.startsWith("YOUR_");
@@ -36,11 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
     statusFilter: document.getElementById("status-filter")
   };
 
-  const state = {
-    session: null,
-    jobs: [],
-    appliedJobIds: new Set()
-  };
+  const state = { session: null, jobs: [], appliedJobIds: new Set() };
 
   if (!isConfigured) {
     const text = "API設定が未完了です。`assets/js/env.js` の URL を設定してください。";
@@ -59,20 +47,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (pageId === "login") {
       loginEls.form?.addEventListener("submit", onLoginSubmit);
       const session = loadSession();
-      if (session) {
-        goTo(routes.jobs);
-        return;
-      }
+      if (session) { goTo(routes.jobs); return; }
       enableForm(loginEls.form);
       return;
     }
 
     if (pageId === "jobs") {
       state.session = loadSession();
-      if (!state.session) {
-        goTo(routes.login);
-        return;
-      }
+      if (!state.session) { goTo(routes.login); return; }
       updateAccountSummary();
       bindJobsEvents();
       refreshJobs();
@@ -87,9 +69,6 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.jobsList?.addEventListener("click", onJobsListClick);
   }
 
-  // ------------------------------
-  // goTo
-  // ------------------------------
   function goTo(path) {
     if (!path) return;
     const url = new URL(path, window.location.origin);
@@ -101,30 +80,15 @@ document.addEventListener("DOMContentLoaded", () => {
     window.location.href = url.pathname;
   }
 
-  // ------------------------------
-  // JSONP リクエスト
-  // ------------------------------
   function jsonpRequest(params, timeoutMs) {
     return new Promise((resolve, reject) => {
       const cbName = "menuTalentCb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
       const script = document.createElement("script");
 
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error("timeout"));
-      }, timeoutMs);
+      const timer = setTimeout(() => { cleanup(); reject(new Error("timeout")); }, timeoutMs);
+      function cleanup() { clearTimeout(timer); delete window[cbName]; if(script.parentNode) script.parentNode.removeChild(script); }
 
-      function cleanup() {
-        clearTimeout(timer);
-        delete window[cbName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-      }
-
-      window[cbName] = function (data) {
-        cleanup();
-        resolve(data);
-      };
-
+      window[cbName] = function (data) { cleanup(); resolve(data); };
       const qs = new URLSearchParams({ ...params, callback: cbName });
       script.src = apiUrl + "?" + qs.toString();
       script.onerror = () => { cleanup(); reject(new Error("script load error")); };
@@ -132,9 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ------------------------------
-  // ログイン送信処理
-  // ------------------------------
   async function onLoginSubmit(e) {
     e.preventDefault();
     setLoginMessage("", false);
@@ -158,11 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      saveSession({
-        token: data.session.token,
-        name: data.session.name,
-        role: data.session.role
-      });
+      saveSession({ token: data.session.token, name: data.session.name, role: data.session.role });
       goTo(routes.jobs);
 
     } catch (err) {
@@ -172,32 +129,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ------------------------------
-  // ログアウト処理
-  // ------------------------------
-  function onLogout() {
-    clearSession();
-    goTo(routes.login);
-  }
+  function onLogout() { clearSession(); goTo(routes.login); }
 
-  // ------------------------------
-  // 求人一覧取得
-  // ------------------------------
   async function refreshJobs() {
     setJobsMessage("読み込み中...", false);
 
     try {
-      const data = await jsonpRequest(
-        { action: "listJobs", token: state.session.token },
-        apiTimeoutMs
-      );
+      const data = await jsonpRequest({ action: "listJobs", token: state.session.token }, apiTimeoutMs);
 
       if (!data.ok) {
-        if (isAuthErrorCode(data.errorCode || data.code)) {
-          clearSession();
-          goTo(routes.login);
-          return;
-        }
+        if (isAuthErrorCode(data.errorCode || data.code)) { clearSession(); goTo(routes.login); return; }
         setJobsMessage(readableApiError(data), true);
         return;
       }
@@ -212,10 +153,23 @@ document.addEventListener("DOMContentLoaded", () => {
       setJobsMessage("通信エラーが発生しました。時間をおいて再度お試しください。", true);
     }
   }
-  
-// ------------------------------
-  // 求人一覧レンダリング
+
   // ------------------------------
+  // 残り日数計算
+  // ------------------------------
+  function calculateRemainingDays(deadline) {
+    if (!deadline) return "未定";
+    const today = new Date();
+    const d = new Date(deadline);
+    if (isNaN(d.getTime())) return "未定";
+
+    const diffMs = d.setHours(0,0,0,0) - today.setHours(0,0,0,0);
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return "期限切れ";
+    return `${diffDays} 日`;
+  }
+
   function renderJobs() {
     if (!jobEls.jobsList) return;
 
@@ -231,9 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     });
 
-    if (jobEls.jobsCount) {
-      jobEls.jobsCount.textContent = `${filtered.length} 件`;
-    }
+    if (jobEls.jobsCount) jobEls.jobsCount.textContent = `${filtered.length} 件`;
 
     if (filtered.length === 0) {
       jobEls.jobsList.innerHTML = "<p>該当する案件がありません。</p>";
@@ -243,11 +195,9 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.jobsList.innerHTML = filtered.map(job => {
       const applied  = state.appliedJobIds.has(job.id);
       const isFull   = Number(job.applicant_count || 0) >= Number(job.max_applicants || 0);
-      const deadline = job.deadline ? formatDate(job.deadline) : "未定";
-      const tags     = job.tags ? escapeHtml(String(job.tags)) : "";
-      const count    = escapeHtml(String(job.applicant_count || 0));
-      const max      = escapeHtml(String(job.max_applicants || 0));
-      
+      const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
+      const capacity = escapeHtml(String(job.max_applicants || 0));
+      const current  = escapeHtml(String(job.applicant_count || 0));
 
       let buttonLabel = "応募する";
       if (applied) buttonLabel = "応募済み";
@@ -257,11 +207,11 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="job-card">
           <div class="job-card__header">
             <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
-            ${tags ? `<span class="job-card__tags">${tags}</span>` : ""}
           </div>
           <div class="job-card__body">
-            <p class="job-card__deadline">締切：${deadline}</p>
-            <p class="job-card__count">応募数：${count} / ${max}</p>
+            <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
+            <p class="job-card__count">募集人数：${capacity}</p>
+            <p class="job-card__count">現在申し込まれている人数：${current}</p>
           </div>
           <div class="job-card__footer">
             <button
@@ -273,34 +223,18 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
     }).join("");
-  }  
+  }
 
-  // ------------------------------
-  // 応募処理
-  // ------------------------------
-  
   async function onJobsListClick(e) {
     const button = e.target.closest(".apply-button");
     if (!button) return;
-
     const jobId = button.dataset.jobId;
     if (!jobId) return;
 
-    // メールアドレスを入力させる
     const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
-
-    // キャンセルまたは未入力
     if (contactEmail === null) return;
-    if (!contactEmail.trim()) {
-      alert("メールアドレスを入力してください。");
-      return;
-    }
-
-    // 簡易バリデーション
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
-      alert("正しいメールアドレスを入力してください。");
-      return;
-    }
+    if (!contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
 
     button.disabled = true;
 
@@ -311,11 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       if (!data.ok) {
-        if (isAuthErrorCode(data.errorCode || data.code)) {
-          clearSession();
-          goTo(routes.login);
-          return;
-        }
+        if (isAuthErrorCode(data.errorCode || data.code)) { clearSession(); goTo(routes.login); return; }
         alert(readableApiError(data));
         button.disabled = false;
         return;
@@ -332,37 +262,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ------------------------------
-  // アカウント情報表示
-  // ------------------------------
   function updateAccountSummary() {
     if (!jobEls.accountSummary || !state.session) return;
     const { name, role } = state.session;
     jobEls.accountSummary.textContent = `${escapeHtml(name || "")}（${roleLabel(role)}）`;
   }
 
-  // ------------------------------
-  // セッション管理
-  // ------------------------------
-  function saveSession(session) {
-    sessionStorage.setItem(sessionKey, JSON.stringify(session));
-  }
+  function saveSession(session) { sessionStorage.setItem(sessionKey, JSON.stringify(session)); }
+  function loadSession() { try { return JSON.parse(sessionStorage.getItem(sessionKey)) || null; } catch { return null; } }
+  function clearSession() { sessionStorage.removeItem(sessionKey); }
 
-  function loadSession() {
-    try {
-      return JSON.parse(sessionStorage.getItem(sessionKey)) || null;
-    } catch {
-      return null;
-    }
-  }
-
-  function clearSession() {
-    sessionStorage.removeItem(sessionKey);
-  }
-
-  // ------------------------------
-  // UI ユーティリティ
-  // ------------------------------
   function setLoginMessage(text, isError) {
     if (!loginEls.message) return;
     loginEls.message.textContent = text;
@@ -375,34 +284,14 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.message.style.color = isError ? "red" : "green";
   }
 
-  function disableForm(form) {
-    form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = true);
-  }
-
-  function enableForm(form) {
-    form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = false);
-  }
+  function disableForm(form) { form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = true); }
+  function enableForm(form) { form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = false); }
 
   function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  
-  
-  function formatDate(value) {
-  if (!value) return "未定";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return escapeHtml(String(value));
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-}
 
-  // ------------------------------
-  // エラーコード判定
-  // ------------------------------
   function isAuthErrorCode(code) {
     const value = String(code || "");
     return value === "invalid_token" || value === "token_expired" || value === "unauthorized";
@@ -425,5 +314,4 @@ document.addEventListener("DOMContentLoaded", () => {
     if (role === "admin") return "管理者";
     return "タレント";
   }
-
 });

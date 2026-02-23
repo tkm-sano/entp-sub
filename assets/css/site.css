@@ -1,15 +1,21 @@
+/* ------------------------------
+   カラーパレット（白背景＋青ボタン）
+------------------------------ */
 :root {
-  --bg: #ffffff;
-  --card: #ffffff;
-  --text: #000000;
-  --muted: #000000;
-  --line: #bcbcbc;
-  --brand: #000000;
-  --brand-soft: #ffffff;
-  --warn: #000000;
-  --warn-soft: #ffffff;
+  --bg: #ffffff;         /* 背景白 */
+  --card: #ffffff;       
+  --text: #000033;       /* 濃い青文字 */
+  --muted: #555577;      /* 補助テキスト */
+  --line: #aaccee;       /* 境界線 */
+  --brand: #3399ff;      /* ボタン・タグブランド色 */
+  --brand-soft: #d6e6ff; /* ブランドソフト */
+  --warn: #ff5555;       /* 警告色 */
+  --warn-soft: #ffe6e6;  /* 警告ソフト */
 }
 
+/* ------------------------------
+   基本設定
+------------------------------ */
 * {
   box-sizing: border-box;
 }
@@ -27,14 +33,18 @@ body {
   margin: 0 auto;
 }
 
+/* ------------------------------
+   ヘッダー・フッター
+------------------------------ */
 .site-header {
   padding: 2.5rem 0 1.5rem;
-  background: #ffffff;
+  background: var(--card);
 }
 
 .site-header h1 {
   margin: 0;
   font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 600;
 }
 
 .subtitle {
@@ -47,13 +57,15 @@ body {
   color: var(--muted);
 }
 
+/* ------------------------------
+   パネル・フォーム
+------------------------------ */
 .panel {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 1.2rem;
   margin-bottom: 1rem;
-  box-shadow: none;
 }
 
 .login-panel {
@@ -67,6 +79,7 @@ body {
 .login-title {
   margin: 0;
   font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+  font-weight: 600;
 }
 
 .login-form-min {
@@ -106,7 +119,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 1rem;
-  background: #ffffff;
+  background: var(--card);
   justify-items: center;
 }
 
@@ -136,18 +149,25 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.55rem 0.65rem;
-  background: #fff;
-  color: #000;
+  background: #ffffff; /* 白背景に変更 */
+  color: var(--text);
   text-align: center;
 }
 
 button {
-  border: 1px solid #000;
+  border: 1px solid var(--brand);
   border-radius: 10px;
   padding: 0.6rem 0.9rem;
   cursor: pointer;
-  background: #fff;
-  color: #000;
+  background: var(--brand); /* 青ボタン維持 */
+  color: #fff;
+  font: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background: #0066cc; /* 濃い青に変化 */
+  color: #fff;
 }
 
 button[disabled] {
@@ -155,15 +175,12 @@ button[disabled] {
   opacity: 0.6;
 }
 
-.account-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.jobs-header {
+/* ------------------------------
+   レイアウトユーティリティ
+------------------------------ */
+.account-row,
+.jobs-header,
+.job-actions {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -211,11 +228,11 @@ body[data-page="login"] .system-message {
 }
 
 .system-message.error {
-  color: #000;
+  color: var(--warn);
 }
 
 .system-message.success {
-  color: #000;
+  color: var(--brand);
 }
 
 .jobs-list {
@@ -232,7 +249,8 @@ body[data-page="login"] .system-message {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 1rem 1.2rem;
-  background: #fff;
+  background: var(--card);
+  color: var(--text);
   width: min(900px, 100%);
   text-align: center;
   display: flex;
@@ -240,7 +258,6 @@ body[data-page="login"] .system-message {
   gap: 0.75rem;
 }
 
-/* ヘッダー：タイトル＋タグ */
 .job-card__header {
   display: flex;
   justify-content: center;
@@ -252,19 +269,19 @@ body[data-page="login"] .system-message {
 .job-card__title {
   margin: 0;
   font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .job-card__tags {
   display: inline-block;
   padding: 0.18rem 0.6rem;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--brand);
   font-size: 0.78rem;
-  color: #000;
-  background: #fff;
+  color: var(--brand);
+  background: var(--brand-soft);
 }
 
-/* ボディ：締切・応募数 */
 .job-card__body {
   display: flex;
   justify-content: center;
@@ -278,25 +295,24 @@ body[data-page="login"] .system-message {
   margin: 0;
 }
 
-/* フッター：応募ボタン */
 .job-card__footer {
   display: flex;
   justify-content: center;
 }
 
 .apply-button {
-  border: 1px solid #000;
+  border: 1px solid var(--brand);
   border-radius: 10px;
   padding: 0.6rem 1.8rem;
   cursor: pointer;
-  background: #fff;
-  color: #000;
+  background: var(--brand); /* 青ボタン維持 */
+  color: #fff;
   font: inherit;
   transition: background 0.15s, color 0.15s;
 }
 
 .apply-button:hover:not(:disabled) {
-  background: #000;
+  background: #0066cc; /* 濃い青に変化 */
   color: #fff;
 }
 
@@ -308,7 +324,8 @@ body[data-page="login"] .system-message {
 /* ------------------------------
    旧クラス（後方互換）
 ------------------------------ */
-.job-head {
+.job-head,
+.job-actions {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -319,6 +336,7 @@ body[data-page="login"] .system-message {
 .job-title {
   margin: 0;
   font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .badge {
@@ -327,8 +345,8 @@ body[data-page="login"] .system-message {
   border-radius: 999px;
   font-size: 0.8rem;
   background: var(--brand-soft);
-  color: #000;
-  border: 1px solid #000;
+  color: var(--brand);
+  border: 1px solid var(--brand);
 }
 
 .badge.warn {
@@ -349,14 +367,6 @@ body[data-page="login"] .system-message {
   white-space: pre-wrap;
 }
 
-.job-actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -366,11 +376,11 @@ body[data-page="login"] .system-message {
 
 .tag {
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--brand);
   padding: 0.18rem 0.55rem;
   font-size: 0.78rem;
-  color: #000;
-  background: #fff;
+  color: var(--brand);
+  background: var(--brand-soft);
 }
 
 @media (max-width: 720px) {
@@ -384,4 +394,9 @@ body[data-page="login"] .system-message {
   .apply-button {
     width: auto;
   }
+}
+
+.job-card__deadline {
+  color: var(--warn); /* 赤色 */
+  font-weight: 600;
 }
