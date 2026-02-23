@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const jobs = JSON.parse(fs.readFileSync('_data/jobs.json', 'utf-8'));
-const jobsDir = '_jobs';
+const jobs = JSON.parse(fs.readFileSync('../../_data/jobs.json', 'utf-8'));
+const jobsDir = '../../_jobs';
 
 if (!fs.existsSync(jobsDir)) fs.mkdirSync(jobsDir);
 
