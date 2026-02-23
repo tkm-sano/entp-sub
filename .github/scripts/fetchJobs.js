@@ -15,4 +15,17 @@ const range = 'Sheet1!A:E'; // データ範囲
 async function fetchSheet() {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
   const rows = res.data.values || [];
-  if (!rows.length) return console.error('スプレッドシートにデータがあり
+  if (!rows.length) return console.error('スプレッドシートにデータがありません');
+
+  const [headers, ...dataRows] = rows;
+  const jobs = dataRows.map(row => {
+    const job = {};
+    headers.forEach((h, i) => job[h] = row[i] || '');
+    return job;
+  });
+
+  fs.writeFileSync('_data/jobs.json', JSON.stringify(jobs, null, 2));
+  console.log(`_data/jobs.json を生成しました（${jobs.length} 件）`);
+}
+
+fetchSheet().catch(console.error);

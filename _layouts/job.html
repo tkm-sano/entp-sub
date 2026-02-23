@@ -17,4 +17,94 @@
     <h1>{{ page.title }}</h1>
     <div class="job-info">
       <p>カテゴリー: {{ page.category }}</p>
-      <p>募集人数: {{ page.
+      <p>募集人数: {{ page.max_applicants }} / 現在応募: {{ page.applicant_count }}</p>
+      <p>応募締切: {{ page.deadline }}</p>
+    </div>
+  </header>
+
+  <main>
+    {{ content }}
+
+    <div class="job-apply">
+      <button id="apply-button" data-job-id="{{ page.job_id }}">応募する</button>
+    </div>
+  </main>
+
+  <footer>
+    <p><a href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a></p>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const button = document.getElementById("apply-button");
+      if (!button) return;
+
+      const jobId = button.dataset.jobId;
+      const apiUrl = window.MENU_TALENT_API_URL || "";
+      const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
+      const sessionKey = "menuTalentSessionV1";
+
+      function loadSession() {
+        try { return JSON.parse(sessionStorage.getItem(sessionKey)) || null; } catch { return null; }
+      }
+
+      function jsonpRequest(params, timeoutMs) {
+        return new Promise((resolve, reject) => {
+          const cbName = "menuTalentCb_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+          const script = document.createElement("script");
+          const timer = setTimeout(() => { cleanup(); reject(new Error("timeout")); }, timeoutMs);
+          function cleanup() { clearTimeout(timer); delete window[cbName]; if(script.parentNode) script.parentNode.removeChild(script); }
+          window[cbName] = (data) => { cleanup(); resolve(data); };
+          const qs = new URLSearchParams({ ...params, callback: cbName });
+          script.src = apiUrl + "?" + qs.toString();
+          script.onerror = () => { cleanup(); reject(new Error("script load error")); };
+          document.head.appendChild(script);
+        });
+      }
+
+      function readableApiError(response) {
+        const code = String(response?.errorCode || response?.code || "");
+        if (code === "invalid_credentials") return "名前またはパスワードが正しくありません。";
+        if (code === "invalid_token" || code === "token_expired") return "セッションが無効です。再ログインしてください。";
+        if (code === "already_applied") return "この案件には既に応募済みです。";
+        if (code === "quota_full") return "応募人数が上限に達しています。";
+        if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
+        if (code === "forbidden") return "この操作を実行する権限がありません。";
+        if (code === "invalid_email") return "確認メール送信先のメールアドレスが不正です。";
+        return String(response?.message || "処理に失敗しました。");
+      }
+
+      button.addEventListener("click", async () => {
+        const session = loadSession();
+        if (!session) { alert("セッションが無効です。ログインしてください。"); return; }
+
+        const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
+        if (!contactEmail || !contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
+
+        button.disabled = true;
+
+        try {
+          const data = await jsonpRequest(
+            { action: "apply", token: session.token, jobId, contactEmail: contactEmail.trim() },
+            apiTimeoutMs
+          );
+
+          if (!data.ok) {
+            alert(readableApiError(data));
+            button.disabled = false;
+            return;
+          }
+
+          alert("応募が完了しました。確認メールをご確認ください。");
+
+        } catch (err) {
+          console.error(err);
+          alert("通信エラーが発生しました。時間をおいて再度お試しください。");
+          button.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
