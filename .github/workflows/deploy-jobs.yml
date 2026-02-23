@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm install
         working-directory: .github/scripts
+      
+      - name: Create _data directory
+        run: mkdir -p _data
 
       - name: Fetch Jobs from Google Sheets
         run: node fetchJobs.mjs
