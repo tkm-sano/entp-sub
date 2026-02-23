@@ -24,7 +24,7 @@ async function fetchSheet() {
     return job;
   });
 
-  fs.writeFileSync('_data/jobs.json', JSON.stringify(jobs, null, 2));
+  fs.writeFileSync('../../_data/jobs.json', JSON.stringify(jobs, null, 2));
   console.log(`_data/jobs.json を生成しました（${jobs.length} 件）`);
 }
 
