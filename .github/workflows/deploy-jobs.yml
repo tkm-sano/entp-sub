@@ -25,13 +25,13 @@ jobs:
         run: echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
 
       - name: Fetch Jobs from Google Sheets
-        run: node fetchJobs.js
+        run: node fetchJobs.mjs
         working-directory: .github/scripts
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
 
       - name: Generate Markdown
-        run: node generateMarkdown.js
+        run: node generateMarkdown.mjs
         working-directory: .github/scripts
 
       - name: Setup Ruby
