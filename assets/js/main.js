@@ -66,7 +66,6 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.searchInput?.addEventListener("input", renderJobs);
     jobEls.categoryFilter?.addEventListener("change", renderJobs);
     jobEls.statusFilter?.addEventListener("change", renderJobs);
-    jobEls.jobsList?.addEventListener("click", onJobsListClick);
   }
 
   function goTo(path) {
@@ -138,13 +137,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await jsonpRequest({ action: "listJobs", token: state.session.token }, apiTimeoutMs);
 
       if (!data.ok) {
-        if (isAuthErrorCode(data.errorCode || data.code)) { clearSession(); goTo(routes.login); return; }
         setJobsMessage(readableApiError(data), true);
         return;
       }
 
       state.jobs = data.jobs || [];
-      state.appliedJobIds = new Set();
       setJobsMessage("", false);
       renderJobs();
 
@@ -154,9 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ------------------------------
-  // 残り日数計算
-  // ------------------------------
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
     const today = new Date();
@@ -193,16 +187,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     jobEls.jobsList.innerHTML = filtered.map(job => {
-      const applied  = state.appliedJobIds.has(job.id);
-      const isFull   = Number(job.applicant_count || 0) >= Number(job.max_applicants || 0);
       const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
       const capacity = escapeHtml(String(job.max_applicants || 0));
       const current  = escapeHtml(String(job.applicant_count || 0));
 
-      let buttonLabel = "応募する";
-      if (applied) buttonLabel = "応募済み";
-      else if (isFull) buttonLabel = "満員";
-
+      // 「詳細ページ」リンクボタンに変更
       return `
         <div class="job-card">
           <div class="job-card__header">
@@ -214,52 +203,11 @@ document.addEventListener("DOMContentLoaded", () => {
             <p class="job-card__count">現在申し込まれている人数：${current}</p>
           </div>
           <div class="job-card__footer">
-            <button
-              class="apply-button"
-              data-job-id="${escapeHtml(job.id)}"
-              ${applied || isFull ? "disabled" : ""}
-            >${buttonLabel}</button>
+            <a class="details-button" href="/jobs/${escapeHtml(job.id)}/">詳細</a>
           </div>
         </div>
       `;
     }).join("");
-  }
-
-  async function onJobsListClick(e) {
-    const button = e.target.closest(".apply-button");
-    if (!button) return;
-    const jobId = button.dataset.jobId;
-    if (!jobId) return;
-
-    const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
-    if (contactEmail === null) return;
-    if (!contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
-
-    button.disabled = true;
-
-    try {
-      const data = await jsonpRequest(
-        { action: "apply", token: state.session.token, jobId, contactEmail: contactEmail.trim() },
-        apiTimeoutMs
-      );
-
-      if (!data.ok) {
-        if (isAuthErrorCode(data.errorCode || data.code)) { clearSession(); goTo(routes.login); return; }
-        alert(readableApiError(data));
-        button.disabled = false;
-        return;
-      }
-
-      state.appliedJobIds.add(jobId);
-      renderJobs();
-      alert("応募が完了しました。確認メールをご確認ください。");
-
-    } catch (err) {
-      console.error(err);
-      alert("通信エラーが発生しました。時間をおいて再度お試しください。");
-      button.disabled = false;
-    }
   }
 
   function updateAccountSummary() {
@@ -290,23 +238,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function escapeHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-
-  function isAuthErrorCode(code) {
-    const value = String(code || "");
-    return value === "invalid_token" || value === "token_expired" || value === "unauthorized";
-  }
-
-  function readableApiError(response) {
-    const code = String(response?.errorCode || response?.code || "");
-    if (code === "invalid_credentials") return "名前またはパスワードが正しくありません。";
-    if (code === "invalid_token" || code === "token_expired") return "セッションが無効です。再ログインしてください。";
-    if (code === "already_applied") return "この案件には既に応募済みです。";
-    if (code === "quota_full") return "応募人数が上限に達しています。";
-    if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
-    if (code === "forbidden") return "この操作を実行する権限がありません。";
-    if (code === "invalid_email") return "確認メール送信先のメールアドレスが不正です。";
-    return String(response?.message || "処理に失敗しました。");
   }
 
   function roleLabel(role) {

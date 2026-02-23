@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ page.title }} | 案件詳細</title>
+  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  <style>
+    .job-header { margin-bottom: 1em; }
+    .job-info p { margin: 0.2em 0; }
+    .job-apply { margin-top: 2em; }
+    #apply-button { padding: 0.5em 1em; font-size: 1em; cursor: pointer; }
+    #apply-button:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <header class="job-header">
+    <h1>{{ page.title }}</h1>
+    <div class="job-info">
+      <p>カテゴリー: {{ page.category }}</p>
+      <p>募集人数: {{ page.
