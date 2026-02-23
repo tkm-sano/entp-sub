@@ -7,7 +7,7 @@ baseurl: "/entp-sub"
 collections:
   jobs:
     output: true
-    permalink: /jobs/:job_id/
+    permalink: /jobs/:name/
 exclude:
   - README.md
   - functions
