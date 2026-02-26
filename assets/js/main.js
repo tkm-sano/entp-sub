@@ -319,4 +319,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (role === "admin") return "管理者";
     return "タレント";
   }
+
+  function readableApiError(data) {
+    if (data.error) return data.error;
+    if (data.message) return data.message;
+    return "エラーが発生しました。";
+  }
 });
