@@ -26,14 +26,17 @@ page_id: jobs
         <option value="">すべて</option>
       </select>
     </label>
-    <label>
-      募集状態
-      <select id="status-filter">
-        <option value="all">すべて</option>
-        <option value="open">募集中</option>
-        <option value="closed">締切/定員到達</option>
-      </select>
-    </label>
+    <div class="wage-filter">
+      <label>時給</label>
+      <div class="wage-range">
+        <div class="wage-range-track"></div>
+        <input type="range" id="wage-slider-min" min="0" max="10000" step="100" value="1200" />
+        <input type="range" id="wage-slider-max" min="0" max="10000" step="100" value="5000" />
+      </div>
+      <div class="wage-display">
+        <span id="wage-display-min">1,200</span>円 〜 <span id="wage-display-max">5,000</span>円
+      </div>
+    </div>
   </div>
 
   <p id="jobs-message" class="system-message"></p>

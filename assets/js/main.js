@@ -25,7 +25,10 @@ document.addEventListener("DOMContentLoaded", () => {
     message: document.getElementById("jobs-message"),
     searchInput: document.getElementById("search-input"),
     categoryFilter: document.getElementById("category-filter"),
-    statusFilter: document.getElementById("status-filter")
+    wageSliderMin: document.getElementById("wage-slider-min"),
+    wageSliderMax: document.getElementById("wage-slider-max"),
+    wageDisplayMin: document.getElementById("wage-display-min"),
+    wageDisplayMax: document.getElementById("wage-display-max")
   };
 
   const state = { session: null, jobs: [], appliedJobIds: new Set() };
@@ -57,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.session) { goTo(routes.login); return; }
       updateAccountSummary();
       bindJobsEvents();
+      updateWageRangeTrack();
       refreshJobs();
     }
   }
@@ -65,7 +69,10 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.logoutButton?.addEventListener("click", onLogout);
     jobEls.searchInput?.addEventListener("input", renderJobs);
     jobEls.categoryFilter?.addEventListener("change", renderJobs);
-    jobEls.statusFilter?.addEventListener("change", renderJobs);
+    
+    // 時給フィルターのイベント
+    jobEls.wageSliderMin?.addEventListener("input", onWageSliderChange);
+    jobEls.wageSliderMax?.addEventListener("input", onWageSliderChange);
   }
 
   function goTo(path) {
@@ -77,6 +84,48 @@ document.addEventListener("DOMContentLoaded", () => {
     if (nextPath.endsWith("/index.html")) nextPath = nextPath.replace(/\/index\.html$/, "");
     if (currentPath === nextPath) { window.location.reload(); return; }
     window.location.href = url.pathname;
+  }
+
+  function onWageSliderChange() {
+    let min = parseInt(jobEls.wageSliderMin?.value) || 1200;
+    let max = parseInt(jobEls.wageSliderMax?.value) || 5000;
+    
+    // 下限が上限を超えないようにする
+    if (min > max) {
+      const temp = min;
+      min = max;
+      max = temp;
+      if (jobEls.wageSliderMin) jobEls.wageSliderMin.value = min;
+      if (jobEls.wageSliderMax) jobEls.wageSliderMax.value = max;
+    }
+    
+    updateWageDisplay();
+    updateWageRangeTrack();
+    renderJobs();
+  }
+
+  function updateWageDisplay() {
+    const min = parseInt(jobEls.wageSliderMin?.value) || 1200;
+    const max = parseInt(jobEls.wageSliderMax?.value) || 5000;
+    
+    if (jobEls.wageDisplayMin) jobEls.wageDisplayMin.textContent = min.toLocaleString();
+    if (jobEls.wageDisplayMax) jobEls.wageDisplayMax.textContent = max.toLocaleString();
+  }
+
+  function updateWageRangeTrack() {
+    const min = parseInt(jobEls.wageSliderMin?.value) || 1200;
+    const max = parseInt(jobEls.wageSliderMax?.value) || 5000;
+    const sliderMin = parseInt(jobEls.wageSliderMin?.min) || 0;
+    const sliderMax = parseInt(jobEls.wageSliderMin?.max) || 10000;
+    
+    const percentMin = ((min - sliderMin) / (sliderMax - sliderMin)) * 100;
+    const percentMax = ((max - sliderMin) / (sliderMax - sliderMin)) * 100;
+    
+    const track = document.querySelector('.wage-range-track');
+    if (track) {
+      track.style.left = percentMin + '%';
+      track.style.width = (percentMax - percentMin) + '%';
+    }
   }
 
   function jsonpRequest(params, timeoutMs) {
@@ -169,13 +218,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const keyword  = (jobEls.searchInput?.value || "").trim().toLowerCase();
     const category = jobEls.categoryFilter?.value || "";
-    const status   = jobEls.statusFilter?.value || "";
+    const wageMin  = parseInt(jobEls.wageSliderMin?.value) || 1200;
+    const wageMax  = parseInt(jobEls.wageSliderMax?.value) || 5000;
 
     const filtered = state.jobs.filter(job => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
       if (category && job.category !== category) return false;
-      if (status === "applied" && !state.appliedJobIds.has(job.id)) return false;
-      if (status === "not_applied" && state.appliedJobIds.has(job.id)) return false;
+      
+      // 時給フィルター
+      const hourlyWage = job.hourly_wage || 0;
+      if (hourlyWage < wageMin || hourlyWage > wageMax) return false;
+      
       return true;
     });
 
@@ -192,6 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const current  = escapeHtml(String(job.applicant_count || 0));
       const jobSlug = escapeHtml(String(job.job_id || job.id || ""));
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
+      const hourlyWage = job.hourly_wage ? `¥${job.hourly_wage.toLocaleString()}` : "未設定";
 
       // 「詳細ページ」リンクボタンに変更
       return `
@@ -202,6 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="job-card__body">
               <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
+              <p class="job-card__wage">時給：${hourlyWage}</p>
               <p class="job-card__count">募集人数：${capacity}</p>
               <p class="job-card__count">現在申し込まれている人数：${current}</p>
             </div>
