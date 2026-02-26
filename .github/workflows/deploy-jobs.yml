@@ -16,30 +16,65 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify environment
+        run: |
+          echo "ワークフローの実行環境を確認しています..."
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          if [ -z "${{ secrets.SHEET_ID }}" ]; then
+            echo "Error: SHEET_ID が設定されていません"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SERVICE_ACCOUNT_KEY }}" ]; then
+            echo "Error: SERVICE_ACCOUNT_KEY が設定されていません"
+            exit 1
+          fi
+          echo "環境変数の確認が完了しました"
+
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
       - name: Write service account key
-        run: echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
+        run: |
+          echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
+          echo "サービスアカウントキーを作成しました"
 
       - name: Install dependencies
         run: npm install
         working-directory: .github/scripts
-      
+
       - name: Create _data directory
         run: mkdir -p _data
 
       - name: Fetch Jobs from Google Sheets
-        run: node fetchJobs.mjs
+        run: |
+          node fetchJobs.mjs
+          echo "取得した求人データ:"
+          cat ../../_data/jobs.json | head -20
         working-directory: .github/scripts
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
 
       - name: Generate Markdown
-        run: node generateMarkdown.mjs
+        run: |
+          node generateMarkdown.mjs
+          echo "生成されたMarkdownファイル:"
+          ls -la ../../_jobs/
         working-directory: .github/scripts
+      
+      - name: Verify generated files
+        run: |
+          if [ ! -f "_data/jobs.json" ]; then
+            echo "Error: jobs.json が生成されていません"
+            exit 1
+          fi
+          JOB_COUNT=$(find _jobs -name "*.md" -type f | wc -l)
+          echo "生成されたジョブファイル数: $JOB_COUNT"
+          if [ "$JOB_COUNT" -eq 0 ]; then
+            echo "Warning: ジョブファイルが生成されていません"
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -48,7 +83,16 @@ jobs:
           bundler-cache: true
 
       - name: Build Jekyll site
-        run: bundle exec jekyll build
+        run: |
+          bundle exec jekyll build
+          echo "Jekyll ビルドが完了しました"
+          echo "生成されたページ:"
+          ls -la _site/jobs/ || echo "jobs ディレクトリが見つかりません"
+
+      - name: Clean up sensitive files
+        run: |
+          rm -f .github/scripts/service-account.json
+          echo "サービスアカウントキーを削除しました"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -60,7 +104,13 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        
+      - name: Deployment complete
+        run: |
+          echo "デプロイが完了しました"
+          echo "サイトURL: ${{ steps.deployment.outputs.page_url }}"
