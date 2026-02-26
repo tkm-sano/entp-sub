@@ -586,3 +586,109 @@ body[data-page="login"] .system-message {
   font-weight: 600;
 }
 
+/* ===============================
+   Job Detail Page (job.html)
+=============================== */
+body[data-page="job"] {
+  background: #ffffff;
+  color: #000000;
+}
+
+.job-page {
+  max-width: 920px;
+  margin: 40px auto 64px;
+  padding: 0 20px;
+}
+
+.job-hero {
+  background: transparent;
+  border-radius: 0;
+  padding: 0 0 12px 0;
+  box-shadow: none;
+}
+
+.job-hero h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #000000;
+}
+
+.job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  color: #000000;
+  font-size: 14px;
+}
+
+.job-content {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  margin-top: 20px;
+}
+
+.job-detail-list {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  row-gap: 14px;
+  column-gap: 20px;
+}
+
+.job-detail-list dt {
+  font-weight: 600;
+  color: #000000;
+}
+
+.job-detail-list dd {
+  margin: 0;
+  color: #000000;
+}
+
+.job-detail-list dd.pre-line {
+  white-space: pre-line;
+}
+
+.job-apply {
+  margin-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.back-link {
+  color: #000000;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+#apply-button {
+  border: 1px solid #000;
+  border-radius: 10px;
+  padding: 0.55rem 1.4rem;
+  cursor: pointer;
+  background: #ffffff;
+  color: #000000;
+  font: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+
+#apply-button:hover:not(:disabled) {
+  background: #f2f2f2;
+  color: #000000;
+}
+
+#apply-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 720px) {
+  .job-detail-list {
+    grid-template-columns: 1fr;
+  }
+}
+

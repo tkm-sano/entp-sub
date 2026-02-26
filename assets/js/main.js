@@ -223,11 +223,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const filtered = state.jobs.filter(job => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
-      if (category && job.category !== category) return false;
+      const jobCategory = job.category || (Array.isArray(job.tags) ? job.tags[0] : job.tags) || "";
+      if (category && jobCategory !== category) return false;
+
+      if (job.deadline) {
+        const deadlineDate = new Date(job.deadline);
+        if (!Number.isNaN(deadlineDate.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          deadlineDate.setHours(0, 0, 0, 0);
+          if (deadlineDate < today) return false;
+        }
+      }
       
       // 時給フィルター
-      const hourlyWage = job.hourly_wage || 0;
-      if (hourlyWage < wageMin || hourlyWage > wageMax) return false;
+      const hourlyWage = Number(job.hourly_wage ?? job.hourlyWage);
+      if (Number.isFinite(hourlyWage)) {
+        if (hourlyWage < wageMin || hourlyWage > wageMax) return false;
+      }
       
       return true;
     });
@@ -241,11 +254,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     jobEls.jobsList.innerHTML = filtered.map(job => {
       const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
-      const capacity = escapeHtml(String(job.max_applicants || 0));
-      const current  = escapeHtml(String(job.applicant_count || 0));
+      const capacity = escapeHtml(String(job.max_applicants ?? job.maxApplicants ?? 0));
+      const current  = escapeHtml(String(job.applicant_count ?? job.applicantCount ?? 0));
       const jobSlug = escapeHtml(String(job.job_id || job.id || ""));
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
-      const hourlyWage = job.hourly_wage ? `¥${job.hourly_wage.toLocaleString()}` : "未設定";
+      const hourlyWage = Number.isFinite(Number(job.hourly_wage ?? job.hourlyWage))
+        ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
+        : "未設定";
+      const fee = job.fee ? escapeHtml(String(job.fee)) : "未設定";
 
       // 「詳細ページ」リンクボタンに変更
       return `
@@ -257,6 +273,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="job-card__body">
               <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
               <p class="job-card__wage">時給：${hourlyWage}</p>
+              <p class="job-card__wage">ギャラ：${fee}</p>
               <p class="job-card__count">募集人数：${capacity}</p>
               <p class="job-card__count">現在申し込まれている人数：${current}</p>
             </div>

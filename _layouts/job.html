@@ -4,58 +4,22 @@
   <meta charset="UTF-8">
   <title>{{ page.title }} | 案件詳細</title>
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
-  <style>
-    body { background: #f6f4ef; }
-    .job-page {
-      max-width: 920px;
-      margin: 40px auto 64px;
-      padding: 0 20px;
-    }
-    .job-hero {
-      background: #fff;
-      border-radius: 16px;
-      padding: 28px 32px;
-      box-shadow: 0 18px 40px rgba(20, 17, 10, 0.08);
-    }
-    .job-hero h1 { margin: 0 0 8px; font-size: 28px; }
-    .job-meta { display: flex; flex-wrap: wrap; gap: 12px 24px; color: #5b534a; }
-    .job-meta span { font-size: 14px; }
-    .job-content {
-      margin-top: 20px;
-      background: #fff;
-      border-radius: 16px;
-      padding: 24px 28px;
-      box-shadow: 0 12px 30px rgba(20, 17, 10, 0.06);
-    }
-    .job-detail-list { display: grid; grid-template-columns: 180px 1fr; row-gap: 14px; column-gap: 20px; }
-    .job-detail-list dt { font-weight: 600; color: #3b342d; }
-    .job-detail-list dd { margin: 0; color: #2b2620; }
-    .job-apply { margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-    #apply-button {
-      padding: 12px 20px;
-      font-size: 15px;
-      border-radius: 999px;
-      border: none;
-      background: #1f5f5b;
-      color: #fff;
-      cursor: pointer;
-    }
-    #apply-button:disabled { background: #c9c4bb; cursor: not-allowed; }
-    .back-link { color: #1f5f5b; text-decoration: none; font-weight: 600; }
-    @media (max-width: 720px) {
-      .job-detail-list { grid-template-columns: 1fr; }
-      .job-hero, .job-content { padding: 20px; }
-    }
-  </style>
+  <script src="{{ '/assets/js/env.js' | relative_url }}"></script>
+  <script>
+    window.MENU_TALENT_ROUTES = {
+      login: "{{ '/' | relative_url }}",
+      jobs: "{{ '/jobs/' | relative_url }}"
+    };
+  </script>
 </head>
-<body>
+<body data-page="job">
   <main class="job-page">
     <section class="job-hero">
-      <h1>{{ page.title }}</h1>
+      <h1 id="job-title">{{ page.title }}</h1>
       <div class="job-meta">
-        <span>カテゴリー: {{ page.category | default: "未記載" }}</span>
-        <span>募集人数: {{ page.max_applicants | default: "-" }} / 現在応募: {{ page.applicant_count | default: "-" }}</span>
-        <span>応募締切: {{ page.deadline | default: "未記載" }}</span>
+        <span>カテゴリー: <span id="job-category">未記載</span></span>
+        <span>募集人数: <span id="job-max-applicants">-</span> / 現在応募: <span id="job-applicant-count">-</span></span>
+        <span>応募締切: <span id="job-deadline">未記載</span></span>
       </div>
     </section>
 
@@ -63,29 +27,31 @@
       {{ content }}
       <dl class="job-detail-list">
         <dt>案件名</dt>
-        <dd>{{ page.title | default: "未記載" }}</dd>
+        <dd id="job-title-detail">未記載</dd>
         <dt>クライアント名</dt>
-        <dd>{{ page.client_name | default: "未記載" }}</dd>
+        <dd id="job-client-name">未記載</dd>
         <dt>撮影内容</dt>
-        <dd>{{ page.shooting_content | default: "未記載" }}</dd>
+        <dd id="job-shoot-description">未記載</dd>
         <dt>コンセプト</dt>
-        <dd>{{ page.concept | default: "未記載" }}</dd>
+        <dd id="job-concept">未記載</dd>
         <dt>撮影候補日</dt>
-        <dd>{{ page.shooting_dates | default: "未記載" }}</dd>
+        <dd id="job-candidate-shoot-dates">未記載</dd>
         <dt>拘束時間</dt>
-        <dd>{{ page.duration | default: "未記載" }}</dd>
+        <dd id="job-duration-hours">未記載</dd>
         <dt>撮影場所</dt>
-        <dd>{{ page.shooting_location | default: "未記載" }}</dd>
+        <dd id="job-shoot-location">未記載</dd>
         <dt>使用媒体</dt>
-        <dd>{{ page.usage_media | default: "未記載" }}</dd>
+        <dd id="job-media-usage">未記載</dd>
         <dt>使用期間</dt>
-        <dd>{{ page.usage_period | default: "未記載" }}</dd>
+        <dd id="job-usage-period">未記載</dd>
         <dt>競合の有無</dt>
-        <dd>{{ page.competition | default: "未記載" }}</dd>
+        <dd id="job-competition-presence">未記載</dd>
         <dt>ギャラ</dt>
-        <dd>{{ page.fee | default: "未記載" }}</dd>
+        <dd id="job-fee">未記載</dd>
         <dt>当日の持ち物</dt>
-        <dd>{{ page.belongings | default: "未記載" }}</dd>
+        <dd id="job-items-to-bring">未記載</dd>
+        <dt>応募者</dt>
+        <dd id="job-applicants" class="pre-line">未記載</dd>
       </dl>
 
       <div class="job-apply">
@@ -103,7 +69,13 @@
       const jobId = button.dataset.jobId;
       const apiUrl = window.MENU_TALENT_API_URL || "";
       const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
+      const routes = window.MENU_TALENT_ROUTES || { login: "/", jobs: "/jobs/" };
       const sessionKey = "menuTalentSessionV1";
+
+      if (!apiUrl) {
+        alert("API設定が未完了です。env.js を確認してください。");
+        return;
+      }
 
       function loadSession() {
         try { return JSON.parse(sessionStorage.getItem(sessionKey)) || null; } catch { return null; }
@@ -135,6 +107,66 @@
         return String(response?.message || "処理に失敗しました。");
       }
 
+      function setText(id, value, fallback = "未記載") {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const text = value === undefined || value === null ? "" : String(value).trim();
+        el.textContent = text || fallback;
+      }
+
+      function renderJob(job) {
+        const category = job.category || (Array.isArray(job.tags) ? job.tags.join(", ") : job.tags) || "";
+        const maxApplicants = job.max_applicants ?? job.maxApplicants ?? "";
+        const applicantCount = job.applicant_count ?? job.applicantCount ?? "";
+
+        setText("job-title", job.title);
+        setText("job-title-detail", job.title);
+        setText("job-category", category);
+        setText("job-max-applicants", maxApplicants, "-");
+        setText("job-applicant-count", applicantCount, "-");
+        setText("job-deadline", job.deadline);
+        setText("job-client-name", job.client_name ?? job.clientName);
+        setText("job-shoot-description", job.shoot_description);
+        setText("job-concept", job.concept);
+        setText("job-candidate-shoot-dates", job.candidate_shoot_dates);
+        setText("job-duration-hours", job.duration_hours);
+        setText("job-shoot-location", job.shoot_location);
+        setText("job-media-usage", job.media_usage);
+        setText("job-usage-period", job.usage_period);
+        setText("job-competition-presence", job.competition_presence);
+        setText("job-fee", job.fee);
+        setText("job-items-to-bring", job.items_to_bring);
+        setText("job-applicants", job.applicants);
+      }
+
+      async function loadJobDetail() {
+        const session = loadSession();
+        if (!session) { window.location.href = routes.login || "/"; return; }
+        if (!jobId) { alert("案件IDが見つかりません。"); return; }
+
+        try {
+          const data = await jsonpRequest({ action: "listJobs", token: session.token }, apiTimeoutMs);
+          if (!data.ok) {
+            alert(readableApiError(data));
+            return;
+          }
+
+          const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+          const job = jobs.find((item) => String(item.job_id || item.id || "") === String(jobId));
+          if (!job) {
+            alert("案件が見つかりませんでした。");
+            return;
+          }
+
+          renderJob(job);
+        } catch (err) {
+          console.error(err);
+          alert("通信エラーが発生しました。時間をおいて再度お試しください。");
+        }
+      }
+
+      loadJobDetail();
+
       button.addEventListener("click", async () => {
         const session = loadSession();
         if (!session) { alert("セッションが無効です。ログインしてください。"); return; }
@@ -158,6 +190,20 @@
           }
 
           alert("応募が完了しました。確認メールをご確認ください。");
+          const countEl = document.getElementById("job-applicant-count");
+          if (countEl && data.applicantCount !== undefined && data.applicantCount !== null) {
+            countEl.textContent = String(data.applicantCount);
+          }
+
+          const applicantsEl = document.getElementById("job-applicants");
+          if (applicantsEl && session?.name) {
+            const current = applicantsEl.textContent.trim();
+            const list = current && current !== "未記載" ? current.split(/\r?\n/) : [];
+            if (!list.includes(session.name)) {
+              list.push(session.name);
+              applicantsEl.textContent = list.join("\n");
+            }
+          }
 
         } catch (err) {
           console.error(err);

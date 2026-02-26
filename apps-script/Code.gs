@@ -160,16 +160,34 @@ function listJobs_(params) {
       const applicantCount = Number(counts[job.id] || 0);
       return {
         id: job.id,
+        job_id: job.id,
         title: job.title,
         description: job.description,
+        category: job.category || (job.tags && job.tags.length ? job.tags[0] : ""),
+        fee: job.fee,
         location: job.location,
         deadline: job.deadline,
         maxApplicants: job.maxApplicants,
+        max_applicants: job.maxApplicants,
         applicantCount,
+        applicant_count: applicantCount,
         clientName: job.clientName,
+        client_name: job.clientName,
         clientEmail: job.clientEmail,
+        client_email: job.clientEmail,
         formUrl: job.formUrl,
+        form_url: job.formUrl,
         tags: job.tags,
+        applicants: job.applicants,
+        shoot_description: job.shootDescription,
+        concept: job.concept,
+        candidate_shoot_dates: job.candidateShootDates,
+        duration_hours: job.durationHours,
+        shoot_location: job.shootLocation,
+        media_usage: job.mediaUsage,
+        usage_period: job.usagePeriod,
+        competition_presence: job.competitionPresence,
+        items_to_bring: job.itemsToBring,
         applied: Boolean(applied[job.id])
       };
     })
@@ -247,6 +265,7 @@ function apply_(params) {
 
     const applicantCount = sameJobApplications.length + 1;
     updateJobApplicantCount_(target, applicantCount);
+    updateJobApplicants_(target, session.name);
     sendApplicantReceiptEmail_(target, session.name, contactEmail, applicantCount);
 
     return {
@@ -379,6 +398,8 @@ function readJobs_(ss) {
   const idCol = findHeaderIndex_(table.headers, ["job_id", "jobid", "id", "案件id"]);
   const titleCol = findHeaderIndex_(table.headers, ["title", "案件名"]);
   const descriptionCol = findHeaderIndex_(table.headers, ["description", "詳細", "説明"]);
+  const categoryCol = findHeaderIndex_(table.headers, ["category", "カテゴリ"]);
+  const feeCol = findHeaderIndex_(table.headers, ["fee", "ギャラ", "報酬"]);
   const locationCol = findHeaderIndex_(table.headers, ["location", "勤務地"]);
   const deadlineCol = findHeaderIndex_(table.headers, ["deadline", "締切", "締切日時"]);
   const maxApplicantsCol = findHeaderIndex_(table.headers, ["max_applicants", "maxapplicants", "定員", "応募上限"]);
@@ -387,6 +408,7 @@ function readJobs_(ss) {
   const formUrlCol = findHeaderIndex_(table.headers, ["form_url", "formurl", "googleform", "選考フォーム"]);
   const tagsCol = findHeaderIndex_(table.headers, ["tags", "tag", "カテゴリ", "category"]);
   const applicantCountCol = findHeaderIndex_(table.headers, ["applicant_count", "applicantcount", "応募人数"]);
+  const applicantsCol = findHeaderIndex_(table.headers, ["applicants", "応募者", "応募者一覧"]);
   const deadlineNotifiedAtCol = findHeaderIndex_(table.headers, [
     "deadline_notified_at",
     "deadlinenotifiedat",
@@ -394,6 +416,15 @@ function readJobs_(ss) {
     "通知日時",
     "送信日時"
   ]);
+  const shootDescriptionCol = findHeaderIndex_(table.headers, ["shoot_description", "shootdescription", "撮影内容", "撮影詳細"]);
+  const conceptCol = findHeaderIndex_(table.headers, ["concept", "コンセプト"]);
+  const candidateShootDatesCol = findHeaderIndex_(table.headers, ["candidate_shoot_dates", "candidateshootdates", "撮影候補日"]);
+  const durationHoursCol = findHeaderIndex_(table.headers, ["duration_hours", "durationhours", "拘束時間", "撮影時間"]);
+  const shootLocationCol = findHeaderIndex_(table.headers, ["shoot_location", "shootlocation", "撮影場所", "撮影地"]);
+  const mediaUsageCol = findHeaderIndex_(table.headers, ["media_usage", "mediausage", "使用媒体"]);
+  const usagePeriodCol = findHeaderIndex_(table.headers, ["usage_period", "usageperiod", "使用期間"]);
+  const competitionPresenceCol = findHeaderIndex_(table.headers, ["competition_presence", "competitionpresence", "競合", "競合の有無"]);
+  const itemsToBringCol = findHeaderIndex_(table.headers, ["items_to_bring", "itemstobring", "持ち物", "当日の持ち物"]);
 
   if (titleCol < 0 || deadlineCol < 0) {
     throw apiError_("config_error", "jobs シートに title/deadline 列が必要です。");
@@ -409,10 +440,13 @@ function readJobs_(ss) {
         rowNumber,
         sheet: table.sheet,
         applicantCountCol,
+        applicantsCol,
         deadlineNotifiedAtCol,
         id: rawId || `job_${rowNumber}`,
         title: String(row[titleCol] || "").trim(),
         description: descriptionCol >= 0 ? String(row[descriptionCol] || "").trim() : "",
+        category: categoryCol >= 0 ? String(row[categoryCol] || "").trim() : "",
+        fee: feeCol >= 0 ? String(row[feeCol] || "").trim() : "",
         location: locationCol >= 0 ? String(row[locationCol] || "").trim() : "",
         deadline: deadlineIso,
         maxApplicants: parseNumber_(maxApplicantsCol >= 0 ? row[maxApplicantsCol] : 0),
@@ -420,7 +454,17 @@ function readJobs_(ss) {
         clientEmail: clientEmailCol >= 0 ? String(row[clientEmailCol] || "").trim() : "",
         formUrl: formUrlCol >= 0 ? String(row[formUrlCol] || "").trim() : "",
         deadlineNotifiedAt: deadlineNotifiedAtCol >= 0 ? row[deadlineNotifiedAtCol] : "",
-        tags: parseTags_(tagsCol >= 0 ? row[tagsCol] : "")
+        tags: parseTags_(tagsCol >= 0 ? row[tagsCol] : ""),
+        applicants: applicantsCol >= 0 ? String(row[applicantsCol] || "").trim() : "",
+        shootDescription: shootDescriptionCol >= 0 ? String(row[shootDescriptionCol] || "").trim() : "",
+        concept: conceptCol >= 0 ? String(row[conceptCol] || "").trim() : "",
+        candidateShootDates: candidateShootDatesCol >= 0 ? String(row[candidateShootDatesCol] || "").trim() : "",
+        durationHours: durationHoursCol >= 0 ? String(row[durationHoursCol] || "").trim() : "",
+        shootLocation: shootLocationCol >= 0 ? String(row[shootLocationCol] || "").trim() : "",
+        mediaUsage: mediaUsageCol >= 0 ? String(row[mediaUsageCol] || "").trim() : "",
+        usagePeriod: usagePeriodCol >= 0 ? String(row[usagePeriodCol] || "").trim() : "",
+        competitionPresence: competitionPresenceCol >= 0 ? String(row[competitionPresenceCol] || "").trim() : "",
+        itemsToBring: itemsToBringCol >= 0 ? String(row[itemsToBringCol] || "").trim() : ""
       };
     })
     .filter((row) => row.title);
@@ -531,6 +575,25 @@ function updateJobApplicantCount_(job, applicantCount) {
   }
 
   job.sheet.getRange(job.rowNumber, job.applicantCountCol + 1).setValue(applicantCount);
+}
+
+function updateJobApplicants_(job, applicantName) {
+  if (job.applicantsCol < 0 || !applicantName) {
+    return;
+  }
+
+  const raw = String(job.applicants || "").trim();
+  const list = raw
+    ? raw.split(/\r?\n/).map((value) => String(value || "").trim()).filter((value) => value)
+    : [];
+
+  if (!list.includes(applicantName)) {
+    list.push(applicantName);
+  }
+
+  const nextValue = list.join("\n");
+  job.sheet.getRange(job.rowNumber, job.applicantsCol + 1).setValue(nextValue);
+  job.applicants = nextValue;
 }
 
 function sendApplicantReceiptEmail_(job, applicantName, recipientEmail, applicantCount) {
