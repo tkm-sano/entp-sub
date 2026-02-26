@@ -63,7 +63,7 @@ jobs.forEach((job, index) => {
   // Code.gs では job_2, job_3 のような形式で ID を生成
   const rowNumber = index + 2; // ヘッダー行を除く
   const jobId = `job_${rowNumber}`;
-  const filename = slugify(title);
+  const filename = jobId; // job_idをファイル名として使用
 
   // Code.gs で使用されるフィールドを全て含める
   const content = `---
