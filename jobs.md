@@ -11,6 +11,7 @@ page_id: jobs
 
   <div class="jobs-header">
     <h2>案件一覧</h2>
+    <p class="muted"><br>詳細は各案件をクリック！</p>
     <p id="jobs-count" class="jobs-count"></p>
   </div>
 

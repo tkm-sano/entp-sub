@@ -190,22 +190,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
       const capacity = escapeHtml(String(job.max_applicants || 0));
       const current  = escapeHtml(String(job.applicant_count || 0));
+      const jobSlug = escapeHtml(String(job.job_id || job.id || ""));
+      const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
 
       // 「詳細ページ」リンクボタンに変更
       return `
-        <div class="job-card">
-          <div class="job-card__header">
-            <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
+        <a class="job-card-link" href="${jobsBase}${jobSlug}/">
+          <div class="job-card">
+            <div class="job-card__header">
+              <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
+            </div>
+            <div class="job-card__body">
+              <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
+              <p class="job-card__count">募集人数：${capacity}</p>
+              <p class="job-card__count">現在申し込まれている人数：${current}</p>
+            </div>
+            <div class="job-card__footer"></div>
           </div>
-          <div class="job-card__body">
-            <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
-            <p class="job-card__count">募集人数：${capacity}</p>
-            <p class="job-card__count">現在申し込まれている人数：${current}</p>
-          </div>
-          <div class="job-card__footer">
-            <a class="details-button" href="/jobs/${escapeHtml(job.id)}/">詳細</a>
-          </div>
-        </div>
+        </a>
       `;
     }).join("");
   }

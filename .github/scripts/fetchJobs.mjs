@@ -10,7 +10,7 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: 'v4', auth });
 const spreadsheetId = process.env.SHEET_ID;
-const range = 'jobs!A:E'; // データ範囲
+const range = 'jobs!A:Z'; // データ範囲
 
 async function fetchSheet() {
   const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
