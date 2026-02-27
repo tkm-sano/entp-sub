@@ -1045,7 +1045,7 @@ body[data-page="job"] {
   .back-link {
     font-size: 30px;
   }
-}}
+}
 
 @media (max-width: 360px) {
   body[data-page="job"] {
@@ -1093,6 +1093,6 @@ body[data-page="job"] {
     width: 95%;
     min-width: auto;
   }
-}}
+}
 
 
