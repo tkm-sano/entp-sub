@@ -198,6 +198,22 @@ button[disabled] {
   color: var(--muted);
 }
 
+.jobs-header {
+  flex-direction: column;
+  text-align: center;
+}
+
+.jobs-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.jobs-pagination {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
 .filters {
   margin-top: 1rem;
   display: flex;
@@ -605,12 +621,13 @@ body[data-page="job"] {
   border-radius: 0;
   padding: 0 0 12px 0;
   box-shadow: none;
+  text-align: center;
 }
 
 .job-hero h1 {
   margin: 0 0 8px;
   font-size: 28px;
-  color: #000000;
+  color: var(--brand);
 }
 
 .job-meta {
@@ -619,6 +636,7 @@ body[data-page="job"] {
   gap: 12px 24px;
   color: #000000;
   font-size: 14px;
+  justify-content: center;
 }
 
 .job-content {
@@ -630,55 +648,58 @@ body[data-page="job"] {
 }
 
 .job-detail-list {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  row-gap: 14px;
-  column-gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
 }
 
-.job-detail-list dt {
+.job-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #000000;
+  font-size: 14px;
+}
+
+.job-detail-label {
   font-weight: 600;
-  color: #000000;
+  min-width: fit-content;
 }
 
-.job-detail-list dd {
-  margin: 0;
-  color: #000000;
-}
-
-.job-detail-list dd.pre-line {
+.job-applicants-list {
   white-space: pre-line;
 }
 
 .job-apply {
   margin-top: 24px;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
   gap: 12px;
 }
 
 .back-link {
-  color: #000000;
+  color: var(--brand);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 #apply-button {
-  border: 1px solid #000;
+  border: 1px solid var(--brand);
   border-radius: 10px;
-  padding: 0.55rem 1.4rem;
+  padding: 0.6rem 1.8rem;
   cursor: pointer;
-  background: #ffffff;
-  color: #000000;
+  background: var(--brand);
+  color: #fff;
   font: inherit;
   transition: background 0.15s, color 0.15s;
 }
 
 #apply-button:hover:not(:disabled) {
-  background: #f2f2f2;
-  color: #000000;
+  background: #0066cc;
+  color: #fff;
 }
 
 #apply-button:disabled {
@@ -687,8 +708,8 @@ body[data-page="job"] {
 }
 
 @media (max-width: 720px) {
-  .job-detail-list {
-    grid-template-columns: 1fr;
+  .job-detail-item {
+    flex-direction: column;
   }
 }
 

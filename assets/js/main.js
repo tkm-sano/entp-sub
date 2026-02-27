@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
   const isConfigured = apiUrl && !apiUrl.startsWith("YOUR_");
   const sessionKey = "menuTalentSessionV1";
+  const pageSize = 10;
 
   const loginEls = {
     form: document.getElementById("sheet-login-form"),
@@ -22,6 +23,8 @@ document.addEventListener("DOMContentLoaded", () => {
     logoutButton: document.getElementById("logout-button"),
     jobsList: document.getElementById("jobs-list"),
     jobsCount: document.getElementById("jobs-count"),
+    pagination: document.getElementById("jobs-pagination"),
+    nextButton: document.getElementById("jobs-next"),
     message: document.getElementById("jobs-message"),
     searchInput: document.getElementById("search-input"),
     categoryFilter: document.getElementById("category-filter"),
@@ -31,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wageDisplayMax: document.getElementById("wage-display-max")
   };
 
-  const state = { session: null, jobs: [], appliedJobIds: new Set() };
+  const state = { session: null, jobs: [], appliedJobIds: new Set(), page: 1 };
 
   if (!isConfigured) {
     const text = "API設定が未完了です。`assets/js/env.js` の URL を設定してください。";
@@ -67,12 +70,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function bindJobsEvents() {
     jobEls.logoutButton?.addEventListener("click", onLogout);
-    jobEls.searchInput?.addEventListener("input", renderJobs);
-    jobEls.categoryFilter?.addEventListener("change", renderJobs);
+    jobEls.searchInput?.addEventListener("input", resetToFirstPage);
+    jobEls.categoryFilter?.addEventListener("change", resetToFirstPage);
+    jobEls.nextButton?.addEventListener("click", onNextPage);
     
     // 時給フィルターのイベント
     jobEls.wageSliderMin?.addEventListener("input", onWageSliderChange);
     jobEls.wageSliderMax?.addEventListener("input", onWageSliderChange);
+  }
+
+  function resetToFirstPage() {
+    state.page = 1;
+    renderJobs();
+  }
+
+  function onNextPage() {
+    state.page += 1;
+    renderJobs();
   }
 
   function goTo(path) {
@@ -101,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     updateWageDisplay();
     updateWageRangeTrack();
-    renderJobs();
+    resetToFirstPage();
   }
 
   function updateWageDisplay() {
@@ -192,6 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       state.jobs = data.jobs || [];
       setJobsMessage("", false);
+      populateCategoryOptions();
       renderJobs();
 
     } catch (err) {
@@ -245,18 +260,30 @@ document.addEventListener("DOMContentLoaded", () => {
       return true;
     });
 
-    if (jobEls.jobsCount) jobEls.jobsCount.textContent = `${filtered.length} 件`;
+    const totalCount = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    if (state.page > totalPages) state.page = totalPages;
+
+    const startIndex = (state.page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const visible = filtered.slice(startIndex, endIndex);
+
+    if (jobEls.jobsCount) {
+      jobEls.jobsCount.textContent = `全${totalCount}件中${visible.length}件表示`;
+    }
 
     if (filtered.length === 0) {
       jobEls.jobsList.innerHTML = "<p>該当する案件がありません。</p>";
+      if (jobEls.pagination) jobEls.pagination.classList.add("hidden");
       return;
     }
 
-    jobEls.jobsList.innerHTML = filtered.map(job => {
+    jobEls.jobsList.innerHTML = visible.map(job => {
       const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
       const capacity = escapeHtml(String(job.max_applicants ?? job.maxApplicants ?? 0));
       const current  = escapeHtml(String(job.applicant_count ?? job.applicantCount ?? 0));
-      const jobSlug = escapeHtml(String(job.job_id || job.id || ""));
+      const rawJobId = String(job.job_id || job.id || "");
+      const jobSlug = escapeHtml(rawJobId.trim().replace(/_/g, "-"));
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
       const hourlyWage = Number.isFinite(Number(job.hourly_wage ?? job.hourlyWage))
         ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
@@ -282,6 +309,30 @@ document.addEventListener("DOMContentLoaded", () => {
         </a>
       `;
     }).join("");
+
+    if (jobEls.pagination) {
+      const hasNext = state.page < totalPages;
+      jobEls.pagination.classList.toggle("hidden", !hasNext);
+      if (jobEls.nextButton) jobEls.nextButton.disabled = !hasNext;
+    }
+  }
+
+  function populateCategoryOptions() {
+    if (!jobEls.categoryFilter) return;
+    const current = jobEls.categoryFilter.value || "";
+    const categories = Array.from(new Set(
+      state.jobs
+        .map(job => job.category || (Array.isArray(job.tags) ? job.tags[0] : job.tags) || "")
+        .map(value => String(value).trim())
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, "ja"));
+
+    jobEls.categoryFilter.innerHTML = '<option value="">すべて</option>' +
+      categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+
+    if (current && categories.includes(current)) {
+      jobEls.categoryFilter.value = current;
+    }
   }
 
   function updateAccountSummary() {

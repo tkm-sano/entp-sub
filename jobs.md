@@ -11,14 +11,14 @@ page_id: jobs
 
   <div class="jobs-header">
     <h2>案件一覧</h2>
-    <p class="muted"><br>詳細は各案件をクリック！</p>
+    <p class="jobs-subtitle">詳細は各案件をクリック！</p>
     <p id="jobs-count" class="jobs-count"></p>
   </div>
 
   <div class="filters" id="filters">
     <label>
       キーワード
-      <input type="search" id="search-input" placeholder="案件名・説明" />
+      <input type="search" id="search-input" placeholder="" />
     </label>
     <label>
       カテゴリ
@@ -41,5 +41,8 @@ page_id: jobs
 
   <p id="jobs-message" class="system-message"></p>
   <div id="jobs-list" class="jobs-list"></div>
+  <div id="jobs-pagination" class="jobs-pagination hidden">
+    <button id="jobs-next" type="button">次へ</button>
+  </div>
 
 </section>
