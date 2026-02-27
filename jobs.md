@@ -16,9 +16,12 @@ page_id: jobs
   </div>
 
   <div class="filters" id="filters">
-    <label>
+    <label class="keyword-filter">
       キーワード
-      <input type="search" id="search-input" placeholder="" />
+      <div class="keyword-row">
+        <input type="search" id="search-input" placeholder="" />
+        <button id="search-button" type="button">検索</button>
+      </div>
     </label>
     <label>
       カテゴリ

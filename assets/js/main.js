@@ -27,6 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     nextButton: document.getElementById("jobs-next"),
     message: document.getElementById("jobs-message"),
     searchInput: document.getElementById("search-input"),
+    searchButton: document.getElementById("search-button"),
     categoryFilter: document.getElementById("category-filter"),
     wageSliderMin: document.getElementById("wage-slider-min"),
     wageSliderMax: document.getElementById("wage-slider-max"),
@@ -34,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wageDisplayMax: document.getElementById("wage-display-max")
   };
 
-  const state = { session: null, jobs: [], appliedJobIds: new Set(), page: 1 };
+  const state = { session: null, jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
 
   if (!isConfigured) {
     const text = "API設定が未完了です。`assets/js/env.js` の URL を設定してください。";
@@ -70,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function bindJobsEvents() {
     jobEls.logoutButton?.addEventListener("click", onLogout);
-    jobEls.searchInput?.addEventListener("input", resetToFirstPage);
+    jobEls.searchButton?.addEventListener("click", resetToFirstPage);
     jobEls.categoryFilter?.addEventListener("change", resetToFirstPage);
     jobEls.nextButton?.addEventListener("click", onNextPage);
     
@@ -80,6 +81,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function resetToFirstPage() {
+    if (pageId === "jobs") {
+      state.appliedKeyword = (jobEls.searchInput?.value || "").trim().toLowerCase();
+    }
     state.page = 1;
     renderJobs();
   }
@@ -231,7 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderJobs() {
     if (!jobEls.jobsList) return;
 
-    const keyword  = (jobEls.searchInput?.value || "").trim().toLowerCase();
+    const keyword  = (state.appliedKeyword || "").trim().toLowerCase();
     const category = jobEls.categoryFilter?.value || "";
     const wageMin  = parseInt(jobEls.wageSliderMin?.value) || 1200;
     const wageMax  = parseInt(jobEls.wageSliderMax?.value) || 5000;
