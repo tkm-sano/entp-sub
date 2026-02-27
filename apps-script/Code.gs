@@ -168,14 +168,16 @@ function listJobs_(params) {
     return i;
   };
 
-  const titleCol    = getCol("title");
-  const deadlineCol = getCol("deadline");
-  const maxCol      = getCol("max_applicants");
-  const emailCol    = getCol("client_email");
-  const formCol     = getCol("form_url");
-  const categoryCol = getCol("category");
-  const countCol    = getCol("applicant_count");
-  const notifiedCol = getCol("deadline_notified_at");
+  const titleCol        = getCol("title");
+  const deadlineCol     = getCol("deadline");
+  const maxCol          = getCol("max_applicants");
+  const emailCol        = getCol("client_email");
+  const formCol         = getCol("form_url");
+  const categoryCol     = getCol("category");
+  const countCol        = getCol("applicant_count");
+  const notifiedCol     = getCol("deadline_notified_at");
+  const applicantsCol   = headers.indexOf("applicants");
+  const applicantUrlCol = headers.indexOf("applicant_url");
 
   const jobs = values.slice(1).map((row, i) => ({
     id:                   "job_" + (i + 2),
@@ -186,7 +188,9 @@ function listJobs_(params) {
     form_url:             row[formCol],
     category:             row[categoryCol],
     applicant_count:      row[countCol],
-    deadline_notified_at: row[notifiedCol]
+    deadline_notified_at: row[notifiedCol],
+    applicants:           applicantsCol >= 0 ? row[applicantsCol] : "",
+    applicant_url:        applicantUrlCol >= 0 ? row[applicantUrlCol] : ""
   }));
 
   return { ok: true, jobs };
@@ -217,11 +221,12 @@ function apply_(params) {
   const values  = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
 
-  const titleCol      = headers.indexOf("title");
-  const deadlineCol   = headers.indexOf("deadline");
-  const maxCol        = headers.indexOf("max_applicants");
-  const countCol      = headers.indexOf("applicant_count");
-  const applicantsCol = headers.indexOf("applicants");
+  const titleCol          = headers.indexOf("title");
+  const deadlineCol       = headers.indexOf("deadline");
+  const maxCol            = headers.indexOf("max_applicants");
+  const countCol          = headers.indexOf("applicant_count");
+  const applicantsCol     = headers.indexOf("applicants");
+  const applicantUrlCol   = headers.indexOf("applicant_url");
 
   if (applicantsCol < 0)
     throw apiError_("config_error", "applicants 列不存在");
@@ -242,31 +247,39 @@ function apply_(params) {
   if (max > 0 && count >= max)
     throw apiError_("quota_full", "定員に達しています");
 
-  let applicants = [];
-  try {
-    applicants = JSON.parse(row[applicantsCol] || "[]");
-  } catch (e) {
-    applicants = [];
-  }
-
-  const alreadyApplied = applicants.some(a => a.uid === tokenPayload.uid);
+  // 既存の応募者名リストを取得
+  const existingApplicantsText = String(row[applicantsCol] || "").trim();
+  const applicantsList = existingApplicantsText ? existingApplicantsText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+  
+  // 既に応募済みかチェック
+  const alreadyApplied = applicantsList.includes(tokenPayload.name);
   if (alreadyApplied)
     throw apiError_("already_applied", "既に応募済みです");
 
-  applicants.push({
-    uid:          tokenPayload.uid,
-    name:         tokenPayload.name,
-    contactEmail: contactEmail,
-    appliedAt:    new Date().toISOString()
-  });
+  // 名簿から該当ユーザーのURLを取得
+  const users = readUsers_();
+  const user = users.find(u => u.uid === tokenPayload.uid);
+  const userUrl = user?.pageUrl || "";
+
+  // 応募者名を追加
+  applicantsList.push(tokenPayload.name);
+  
+  // URLリストを更新
+  const existingUrlsText = applicantUrlCol >= 0 ? String(row[applicantUrlCol] || "").trim() : "";
+  const urlsList = existingUrlsText ? existingUrlsText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+  urlsList.push(userUrl);
 
   const sheetRow = rowIndex + 2;
-  sheet.getRange(sheetRow, countCol      + 1).setValue(count + 1);
-  sheet.getRange(sheetRow, applicantsCol + 1).setValue(JSON.stringify(applicants));
+  sheet.getRange(sheetRow, countCol + 1).setValue(count + 1);
+  sheet.getRange(sheetRow, applicantsCol + 1).setValue(applicantsList.join("\n"));
+  
+  if (applicantUrlCol >= 0) {
+    sheet.getRange(sheetRow, applicantUrlCol + 1).setValue(urlsList.join("\n"));
+  }
 
   sendConfirmationEmail_(contactEmail, tokenPayload.name, title, deadline);
 
-  return { ok: true };
+  return { ok: true, applicantCount: count + 1 };
 }
 
 /* =========================================
@@ -298,14 +311,14 @@ function notifyDeadlinePassed() {
   const values  = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
 
-  const titleCol      = headers.indexOf("title");
-  const deadlineCol   = headers.indexOf("deadline");
-  const emailCol      = headers.indexOf("client_email");
-  const applicantsCol = headers.indexOf("applicants");
-  const notifiedCol   = headers.indexOf("deadline_notified_at");
+  const titleCol          = headers.indexOf("title");
+  const deadlineCol       = headers.indexOf("deadline");
+  const emailCol          = headers.indexOf("client_email");
+  const applicantsCol     = headers.indexOf("applicants");
+  const applicantUrlCol   = headers.indexOf("applicant_url");
+  const notifiedCol       = headers.indexOf("deadline_notified_at");
 
-  const now   = new Date();
-  const users = readUsers_();
+  const now = new Date();
 
   values.slice(1).forEach((row, i) => {
     const deadline    = row[deadlineCol];
@@ -324,17 +337,16 @@ function notifyDeadlinePassed() {
     nextDay.setHours(0, 0, 0, 0);
     if (now < nextDay) return;
 
-    let applicants = [];
-    try {
-      applicants = JSON.parse(row[applicantsCol] || "[]");
-    } catch (e) {
-      applicants = [];
-    }
+    // 応募者名とURLをテキスト形式で取得
+    const applicantsText = String(row[applicantsCol] || "").trim();
+    const applicantUrlText = applicantUrlCol >= 0 ? String(row[applicantUrlCol] || "").trim() : "";
+    
+    const names = applicantsText ? applicantsText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
+    const urls = applicantUrlText ? applicantUrlText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
 
-    const applicantLines = applicants.map(a => {
-      const user    = users.find(u => u.uid === a.uid);
-      const pageUrl = user?.pageUrl || "（URLなし）";
-      return `・${a.name}\n  ${pageUrl}`;
+    const applicantLines = names.map((name, index) => {
+      const url = urls[index] || "（URLなし）";
+      return `・${name}\n  ${url}`;
     });
 
     const deadlineStr = Utilities.formatDate(deadlineDate, "Asia/Tokyo", "yyyy年MM月dd日");
@@ -342,7 +354,7 @@ function notifyDeadlinePassed() {
     const subject = `【応募者一覧】${title}`;
     const body    = [
       `「${title}」の締切（${deadlineStr}）が過ぎました。`,
-      `応募者数：${applicants.length}名`,
+      `応募者数：${names.length}名`,
       "",
       "■ 応募者一覧",
       applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）"

@@ -152,8 +152,24 @@
         setText("job-fee", job.fee);
         setText("job-items-to-bring", job.items_to_bring);
         setText("job-deadline-notified-at", job.deadline_notified_at ?? job.deadlineNotifiedAt);
-        const applicantsText = job.applicants ? String(job.applicants).replace(/[\r\n]+/g, ", ").trim() : "";
-        setText("job-applicants", applicantsText);
+        
+        // 応募者名とURLを結合して表示
+        const applicantsText = job.applicants ? String(job.applicants).trim() : "";
+        const applicantUrlText = job.applicant_url ? String(job.applicant_url).trim() : "";
+        
+        if (applicantsText) {
+          const names = applicantsText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+          const urls = applicantUrlText ? applicantUrlText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
+          
+          const applicantsList = names.map((name, index) => {
+            const url = urls[index] || "";
+            return url ? `${name} (${url})` : name;
+          }).join("\n");
+          
+          setText("job-applicants", applicantsList);
+        } else {
+          setText("job-applicants", "");
+        }
       }
 
       async function loadJobDetail() {
@@ -212,15 +228,8 @@
             countEl.textContent = String(data.applicantCount);
           }
 
-          const applicantsEl = document.getElementById("job-applicants");
-          if (applicantsEl && session?.name) {
-            const current = applicantsEl.textContent.trim();
-            const list = current && current !== "未記載" ? current.split(/\r?\n/) : [];
-            if (!list.includes(session.name)) {
-              list.push(session.name);
-              applicantsEl.textContent = list.join("\n");
-            }
-          }
+          // 最新の案件情報を再取得して応募者リストを更新
+          await loadJobDetail();
 
         } catch (err) {
           console.error(err);
