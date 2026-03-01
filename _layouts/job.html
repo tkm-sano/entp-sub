@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ page.title }} | 案件詳細</title>
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
   <script src="{{ '/assets/js/env.js' | relative_url }}"></script>
@@ -14,37 +15,33 @@
 </head>
 <body data-page="job">
   <main class="job-page">
+    <section class="job-thumbnail-wrap">
+      <div id="job-thumbnail" class="job-thumbnail job-thumbnail--placeholder" aria-label="案件サムネイル">
+        <span>NO IMAGE</span>
+      </div>
+    </section>
+
     <!-- メタセクション（ヘッダー） -->
-    <!-- 対応: title, category, max_applicants, applicant_count, deadline -->
+    <!-- 対応: title, category, deadline -->
     <section class="job-hero">
       <h1 id="job-title">{{ page.title }}</h1>
       <div class="job-meta">
         <span>カテゴリー: <span id="job-category">未記載</span></span>
-        <span>募集人数: <span id="job-max-applicants">-</span>人、現在応募: <span id="job-applicant-count">-</span>人</span>
         <span>残り: <span id="job-remaining-days">未定</span></span>
       </div>
     </section>
 
     <!-- 詳細セクション -->
-    <!-- 対応: shoot_description, concept, candidate_shoot_dates, duration_hours, shoot_location, media_usage, usage_period, competition_presence, fee, items_to_bring, applicants, client_name, client_email, form_url, deadline_notified_at -->
+    <!-- 対応: title, category, deadline, hourly_wage, fee, max_applicants, applicant_count -->
     <section class="job-content">
-      {{ content }}
       <div class="job-detail-list">
         <div class="job-detail-item"><span class="job-detail-label">案件名:</span> <span id="job-title-detail">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">クライアント名:</span> <span id="job-client-name">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">クライアント連絡先:</span> <span id="job-client-email">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">撮影内容:</span> <span id="job-shoot-description">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">コンセプト:</span> <span id="job-concept">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">撮影候補日:</span> <span id="job-candidate-shoot-dates">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">拘束時間:</span> <span id="job-duration-hours">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">撮影場所:</span> <span id="job-shoot-location">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">使用媒体:</span> <span id="job-media-usage">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">使用期間:</span> <span id="job-usage-period">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">競合の有無:</span> <span id="job-competition-presence">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">カテゴリ:</span> <span id="job-category-detail">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">残り:</span> <span id="job-remaining-days-detail">未定</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">時給:</span> <span id="job-hourly-wage">未設定</span></div>
         <div class="job-detail-item"><span class="job-detail-label">ギャラ:</span> <span id="job-fee">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">当日の持ち物:</span> <span id="job-items-to-bring">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">締切通知日:</span> <span id="job-deadline-notified-at">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">応募者:</span> <span id="job-applicants" class="job-applicants-list">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">募集人数:</span> <span id="job-max-applicants">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">現在申し込まれている人数:</span> <span id="job-applicant-count">-</span></div>
       </div>
 
       <div class="job-apply">
@@ -129,46 +126,42 @@
         const category = job.category || (Array.isArray(job.tags) ? job.tags.join(", ") : job.tags) || "";
         const maxApplicants = job.max_applicants ?? job.maxApplicants ?? "";
         const applicantCount = job.applicant_count ?? job.applicantCount ?? "";
+        const hourlyWageRaw = Number(job.hourly_wage ?? job.hourlyWage);
+        const hourlyWage = Number.isFinite(hourlyWageRaw) ? `¥${hourlyWageRaw.toLocaleString()}` : "未設定";
+        const thumbnailRaw =
+          job.thumbnail_url ||
+          job.eyecatch_image ||
+          job.eyecatch_url ||
+          job.eye_catch_image ||
+          job.eye_catch_url ||
+          job.image ||
+          "";
+        const thumbnail = String(thumbnailRaw || "").trim();
+        const thumbnailEl = document.getElementById("job-thumbnail");
 
         // メタセクション表示
         setText("job-title", job.title);
         setText("job-category", category);
         setText("job-max-applicants", maxApplicants);
         setText("job-applicant-count", applicantCount);
-        setText("job-remaining-days", calculateRemainingDays(job.deadline));
+        const remainingDays = calculateRemainingDays(job.deadline);
+        setText("job-remaining-days", remainingDays);
 
         // 詳細セクション表示
         setText("job-title-detail", job.title);
-        setText("job-client-name", job.client_name ?? job.clientName);
-        setText("job-client-email", job.client_email ?? job.clientEmail);
-        setText("job-shoot-description", job.shoot_description);
-        setText("job-concept", job.concept);
-        setText("job-candidate-shoot-dates", job.candidate_shoot_dates);
-        setText("job-duration-hours", job.duration_hours);
-        setText("job-shoot-location", job.shoot_location);
-        setText("job-media-usage", job.media_usage);
-        setText("job-usage-period", job.usage_period);
-        setText("job-competition-presence", job.competition_presence);
+        setText("job-category-detail", category);
+        setText("job-remaining-days-detail", remainingDays);
+        setText("job-hourly-wage", hourlyWage);
         setText("job-fee", job.fee);
-        setText("job-items-to-bring", job.items_to_bring);
-        setText("job-deadline-notified-at", job.deadline_notified_at ?? job.deadlineNotifiedAt);
-        
-        // 応募者名とURLを結合して表示
-        const applicantsText = job.applicants ? String(job.applicants).trim() : "";
-        const applicantUrlText = job.applicant_url ? String(job.applicant_url).trim() : "";
-        
-        if (applicantsText) {
-          const names = applicantsText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
-          const urls = applicantUrlText ? applicantUrlText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
-          
-          const applicantsList = names.map((name, index) => {
-            const url = urls[index] || "";
-            return url ? `${name} (${url})` : name;
-          }).join("\n");
-          
-          setText("job-applicants", applicantsList);
-        } else {
-          setText("job-applicants", "");
+
+        if (thumbnailEl) {
+          if (thumbnail) {
+            thumbnailEl.innerHTML = `<img src="${thumbnail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;")}" alt="${String(job.title || "案件サムネイル").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;")}">`;
+            thumbnailEl.classList.remove("job-thumbnail--placeholder");
+          } else {
+            thumbnailEl.innerHTML = "<span>NO IMAGE</span>";
+            thumbnailEl.classList.add("job-thumbnail--placeholder");
+          }
         }
       }
 

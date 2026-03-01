@@ -293,11 +293,24 @@ document.addEventListener("DOMContentLoaded", () => {
         ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
         : "未設定";
       const fee = job.fee ? escapeHtml(String(job.fee)) : "未設定";
+      const eyeCatchRaw =
+        job.eyecatch_image ||
+        job.eyecatch_url ||
+        job.eye_catch_image ||
+        job.eye_catch_url ||
+        job.thumbnail_url ||
+        job.image ||
+        "";
+      const eyeCatch = String(eyeCatchRaw || "").trim();
+      const eyeCatchHtml = eyeCatch
+        ? `<div class="job-card__eyecatch"><img src="${escapeHtml(eyeCatch)}" alt="${escapeHtml(String(job.title || "案件"))}" loading="lazy" decoding="async"></div>`
+        : `<div class="job-card__eyecatch job-card__eyecatch--placeholder"><span>NO IMAGE</span></div>`;
 
       // 「詳細ページ」リンクボタンに変更
       return `
         <a class="job-card-link" href="${jobsBase}${jobSlug}/">
           <div class="job-card">
+            ${eyeCatchHtml}
             <div class="job-card__header">
               <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
             </div>
