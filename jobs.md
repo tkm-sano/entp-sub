@@ -30,15 +30,14 @@ page_id: jobs
       </select>
     </label>
     <div class="wage-filter">
-      <label>時給</label>
-      <div class="wage-range">
-        <div class="wage-range-track"></div>
-        <input type="range" id="wage-slider-min" min="0" max="10000" step="100" value="1200" />
-        <input type="range" id="wage-slider-max" min="0" max="10000" step="100" value="5000" />
-      </div>
-      <div class="wage-display">
-        <span id="wage-display-min">1,200</span>円 〜 <span id="wage-display-max">5,000</span>円
-      </div>
+      <label for="wage-range-filter">時給</label>
+      <select id="wage-range-filter">
+        <option value="">すべて</option>
+        <option value="under-5000">5,000円以下</option>
+        <option value="5000-7500">5,001円〜7,500円</option>
+        <option value="7500-10000">7,501円〜10,000円</option>
+        <option value="over-10000">10,001円以上</option>
+      </select>
     </div>
   </div>
 

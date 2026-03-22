@@ -23,24 +23,23 @@ function onOpen() {
 
 function runGitHubActionsFromMenu_() {
   const ui = SpreadsheetApp.getUi();
-  const defaultRef = PropertiesService.getScriptProperties().getProperty("GITHUB_REF") || "main";
+  const ref = getDefaultGitHubRef_();
 
-  const prompt = ui.prompt(
-    "GitHub Actions 実行",
-    `実行する ref（ブランチ名やタグ）を入力してください。\n空欄なら ${defaultRef} を使います。`,
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (prompt.getSelectedButton() !== ui.Button.OK) {
-    return;
+  try {
+    const result = triggerGitHubWorkflowDispatch_(ref);
+    ui.alert("GitHub Actions", `ワークフローを起動しました。\n${result}`, ui.ButtonSet.OK);
+  } catch (err) {
+    ui.alert(
+      "GitHub Actions エラー",
+      err && err.message ? err.message : "不明なエラー",
+      ui.ButtonSet.OK
+    );
   }
+}
 
-  const inputRef = String(prompt.getResponseText() || "").trim();
-  const ref = inputRef || defaultRef;
-
-  const result = triggerGitHubWorkflowDispatch_(ref);
-
-  ui.alert("GitHub Actions", `ワークフローを起動しました。\n${result}`, ui.ButtonSet.OK);
+function getDefaultGitHubRef_() {
+  const ref = String(PropertiesService.getScriptProperties().getProperty("GITHUB_REF") || "").trim();
+  return ref || "main";
 }
 
 function triggerGitHubWorkflowDispatch_(ref) {
@@ -86,10 +85,58 @@ function triggerGitHubWorkflowDispatch_(ref) {
   const body = res.getContentText();
 
   if (code !== 204) {
-    throw apiError_("github_dispatch_failed", `GitHub API エラー: status=${code}, body=${body}`);
+    const detail = buildGitHubDispatchErrorMessage_(code, body, owner, repo, workflowId, ref);
+    throw apiError_("github_dispatch_failed", detail);
   }
 
   return `repo=${owner}/${repo}, workflow=${workflowId}, ref=${ref}`;
+}
+
+function buildGitHubDispatchErrorMessage_(statusCode, body, owner, repo, workflowId, ref) {
+  const base = `GitHub API エラー: status=${statusCode}, body=${body}`;
+  let parsed = null;
+
+  try {
+    parsed = body ? JSON.parse(body) : null;
+  } catch (err) {
+    parsed = null;
+  }
+
+  const message = String(parsed?.message || "");
+
+  if (statusCode === 401) {
+    return [
+      base,
+      "認証に失敗しました。GITHUB_TOKEN の値が正しいか確認してください。"
+    ].join("\n");
+  }
+
+  if (statusCode === 403 && /personal access token/i.test(message)) {
+    return [
+      base,
+      "トークン権限不足の可能性があります。次を確認してください。",
+      "1) Fine-grained PAT の場合: 対象リポジトリを許可し、Repository permissions の Actions を Write にする。",
+      "2) Classic PAT の場合: private リポジトリなら repo と workflow スコープを付与する。",
+      "3) トークン所有ユーザーに対象リポジトリの Write 以上の権限がある。",
+      `4) workflow_id=${workflowId} と ref=${ref} が ${owner}/${repo} に存在する。`
+    ].join("\n");
+  }
+
+  if (statusCode === 404) {
+    return [
+      base,
+      "リポジトリまたはワークフローが見つかりません。GITHUB_OWNER/GITHUB_REPO/GITHUB_WORKFLOW_ID を確認してください。"
+    ].join("\n");
+  }
+
+  if (statusCode === 422) {
+    return [
+      base,
+      "workflow_dispatch が無効、または ref が不正の可能性があります。workflow ファイルに workflow_dispatch があるか確認してください。"
+    ].join("\n");
+  }
+
+  return base;
 }
 
 function mustGetScriptProperty_(key) {

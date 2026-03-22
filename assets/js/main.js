@@ -29,10 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     searchInput: document.getElementById("search-input"),
     searchButton: document.getElementById("search-button"),
     categoryFilter: document.getElementById("category-filter"),
-    wageSliderMin: document.getElementById("wage-slider-min"),
-    wageSliderMax: document.getElementById("wage-slider-max"),
-    wageDisplayMin: document.getElementById("wage-display-min"),
-    wageDisplayMax: document.getElementById("wage-display-max")
+    wageRangeFilter: document.getElementById("wage-range-filter")
   };
 
   const state = { session: null, jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
@@ -64,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!state.session) { goTo(routes.login); return; }
       updateAccountSummary();
       bindJobsEvents();
-      updateWageRangeTrack();
       refreshJobs();
     }
   }
@@ -73,11 +69,8 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.logoutButton?.addEventListener("click", onLogout);
     jobEls.searchButton?.addEventListener("click", resetToFirstPage);
     jobEls.categoryFilter?.addEventListener("change", resetToFirstPage);
+    jobEls.wageRangeFilter?.addEventListener("change", resetToFirstPage);
     jobEls.nextButton?.addEventListener("click", onNextPage);
-    
-    // 時給フィルターのイベント
-    jobEls.wageSliderMin?.addEventListener("input", onWageSliderChange);
-    jobEls.wageSliderMax?.addEventListener("input", onWageSliderChange);
   }
 
   function resetToFirstPage() {
@@ -102,48 +95,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (nextPath.endsWith("/index.html")) nextPath = nextPath.replace(/\/index\.html$/, "");
     if (currentPath === nextPath) { window.location.reload(); return; }
     window.location.href = url.pathname;
-  }
-
-  function onWageSliderChange() {
-    let min = parseInt(jobEls.wageSliderMin?.value) || 1200;
-    let max = parseInt(jobEls.wageSliderMax?.value) || 5000;
-    
-    // 下限が上限を超えないようにする
-    if (min > max) {
-      const temp = min;
-      min = max;
-      max = temp;
-      if (jobEls.wageSliderMin) jobEls.wageSliderMin.value = min;
-      if (jobEls.wageSliderMax) jobEls.wageSliderMax.value = max;
-    }
-    
-    updateWageDisplay();
-    updateWageRangeTrack();
-    resetToFirstPage();
-  }
-
-  function updateWageDisplay() {
-    const min = parseInt(jobEls.wageSliderMin?.value) || 1200;
-    const max = parseInt(jobEls.wageSliderMax?.value) || 5000;
-    
-    if (jobEls.wageDisplayMin) jobEls.wageDisplayMin.textContent = min.toLocaleString();
-    if (jobEls.wageDisplayMax) jobEls.wageDisplayMax.textContent = max.toLocaleString();
-  }
-
-  function updateWageRangeTrack() {
-    const min = parseInt(jobEls.wageSliderMin?.value) || 1200;
-    const max = parseInt(jobEls.wageSliderMax?.value) || 5000;
-    const sliderMin = parseInt(jobEls.wageSliderMin?.min) || 0;
-    const sliderMax = parseInt(jobEls.wageSliderMin?.max) || 10000;
-    
-    const percentMin = ((min - sliderMin) / (sliderMax - sliderMin)) * 100;
-    const percentMax = ((max - sliderMin) / (sliderMax - sliderMin)) * 100;
-    
-    const track = document.querySelector('.wage-range-track');
-    if (track) {
-      track.style.left = percentMin + '%';
-      track.style.width = (percentMax - percentMin) + '%';
-    }
   }
 
   function jsonpRequest(params, timeoutMs) {
@@ -237,8 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const keyword  = (state.appliedKeyword || "").trim().toLowerCase();
     const category = jobEls.categoryFilter?.value || "";
-    const wageMin  = parseInt(jobEls.wageSliderMin?.value) || 1200;
-    const wageMax  = parseInt(jobEls.wageSliderMax?.value) || 5000;
+    const wageRange = jobEls.wageRangeFilter?.value || "";
 
     const filtered = state.jobs.filter(job => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
@@ -258,7 +208,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // 時給フィルター
       const hourlyWage = Number(job.hourly_wage ?? job.hourlyWage);
       if (Number.isFinite(hourlyWage)) {
-        if (hourlyWage < wageMin || hourlyWage > wageMax) return false;
+        if (wageRange === "under-5000" && hourlyWage > 5000) return false;
+        if (wageRange === "5000-7500" && (hourlyWage <= 5000 || hourlyWage > 7500)) return false;
+        if (wageRange === "7500-10000" && (hourlyWage <= 7500 || hourlyWage > 10000)) return false;
+        if (wageRange === "over-10000" && hourlyWage <= 10000) return false;
       }
       
       return true;
