@@ -8,6 +8,97 @@ const SHEET_NAMES = {
   jobs: "jobs"
 };
 
+const GITHUB_API_BASE = "https://api.github.com";
+
+/* =========================================
+   Spreadsheet Menu
+========================================= */
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("運用")
+    .addItem("GitHub Actions 実行", "runGitHubActionsFromMenu_")
+    .addToUi();
+}
+
+function runGitHubActionsFromMenu_() {
+  const ui = SpreadsheetApp.getUi();
+  const defaultRef = PropertiesService.getScriptProperties().getProperty("GITHUB_REF") || "main";
+
+  const prompt = ui.prompt(
+    "GitHub Actions 実行",
+    `実行する ref（ブランチ名やタグ）を入力してください。\n空欄なら ${defaultRef} を使います。`,
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (prompt.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const inputRef = String(prompt.getResponseText() || "").trim();
+  const ref = inputRef || defaultRef;
+
+  const result = triggerGitHubWorkflowDispatch_(ref);
+
+  ui.alert("GitHub Actions", `ワークフローを起動しました。\n${result}`, ui.ButtonSet.OK);
+}
+
+function triggerGitHubWorkflowDispatch_(ref) {
+  const props = PropertiesService.getScriptProperties();
+  const owner = mustGetScriptProperty_("GITHUB_OWNER");
+  const repo = mustGetScriptProperty_("GITHUB_REPO");
+  const workflowId = mustGetScriptProperty_("GITHUB_WORKFLOW_ID");
+  const token = mustGetScriptProperty_("GITHUB_TOKEN");
+  const inputsJson = String(props.getProperty("GITHUB_WORKFLOW_INPUTS_JSON") || "").trim();
+
+  let inputs = {};
+  if (inputsJson) {
+    try {
+      const parsed = JSON.parse(inputsJson);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("GITHUB_WORKFLOW_INPUTS_JSON は JSON オブジェクト形式で指定してください");
+      }
+      inputs = parsed;
+    } catch (err) {
+      throw apiError_("config_error", `GITHUB_WORKFLOW_INPUTS_JSON が不正です: ${err.message}`);
+    }
+  }
+
+  const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`;
+  const payload = {
+    ref,
+    inputs
+  };
+
+  const res = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    },
+    payload: JSON.stringify(payload)
+  });
+
+  const code = res.getResponseCode();
+  const body = res.getContentText();
+
+  if (code !== 204) {
+    throw apiError_("github_dispatch_failed", `GitHub API エラー: status=${code}, body=${body}`);
+  }
+
+  return `repo=${owner}/${repo}, workflow=${workflowId}, ref=${ref}`;
+}
+
+function mustGetScriptProperty_(key) {
+  const value = PropertiesService.getScriptProperties().getProperty(key);
+  if (!value)
+    throw apiError_("config_error", `${key} 未設定`);
+  return value;
+}
+
 /* =========================================
    Entry
 ========================================= */
