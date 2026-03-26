@@ -7,3 +7,4 @@ vendor/
 .DS_Store
 functions/node_modules/
 functions/.env*
+README.md
