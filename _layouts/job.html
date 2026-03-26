@@ -30,22 +30,22 @@
     <!-- 詳細セクション -->
     <section class="job-content">
       <div class="job-detail-list">
-        <div class="job-detail-item"><span class="job-detail-label">報酬</span><span id="job-total-reward">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">実施日時</span><span id="job-implementation-date">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">報酬</span><span id="job-total-reward">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">実施日時</span><span id="job-implementation-date">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">-</span></div>
         <div class="job-detail-item"><span class="job-detail-label">残り日数</span><span id="job-remaining-days">未定</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">-</span></div>
       </div>
 
       <div class="job-apply">
@@ -189,7 +189,7 @@
         const totalRewardNumber = Number(totalRewardValue);
         const totalReward = Number.isFinite(totalRewardNumber)
           ? `${totalRewardNumber.toLocaleString()}円（交通費込）`
-          : (totalRewardValue || "未記載");
+          : (totalRewardValue || "-");
         
         // 拘束時間（分離）
         const duration = pickFirst(job.duration, job["拘束時間"], job["拘束時間(時間)"]);
@@ -280,22 +280,22 @@
         setText("job-title", job.title);
 
         // 詳細セクション表示
-        setTextOrFallback("job-total-reward", totalReward, "未記載");
-        setTextOrFallback("job-duration", duration, "未記載");
-        setTextOrFallback("job-hourly-wage", hourlyWage, "未記載");
-        setTextOrFallback("job-implementation-date", implementationDate, "未記載");
-        setTextOrFallback("job-location", location, "未記載");
-        setTextOrFallback("job-requirements", requirements, "未記載");
-        setTextOrFallback("job-recruitment-number", recruitmentNumber, "未記載");
-        setTextOrFallback("job-description", description, "未記載");
-        setTextOrFallback("job-concept", concept, "未記載");
-        setTextOrFallback("job-makeup-support", makeupSupport, "未記載");
-        setTextOrFallback("job-belongings", belongings, "未記載");
-        setTextOrFallback("job-media", media, "未記載");
-        setTextOrFallback("job-usage-period", usagePeriod, "未記載");
-        setTextOrFallback("job-competition", competition, "未記載");
+        setTextOrFallback("job-total-reward", totalReward, "-");
+        setTextOrFallback("job-duration", duration, "-");
+        setTextOrFallback("job-hourly-wage", hourlyWage, "-");
+        setTextOrFallback("job-implementation-date", implementationDate, "-");
+        setTextOrFallback("job-location", location, "-");
+        setTextOrFallback("job-requirements", requirements, "-");
+        setTextOrFallback("job-recruitment-number", recruitmentNumber, "-");
+        setTextOrFallback("job-description", description, "-");
+        setTextOrFallback("job-concept", concept, "-");
+        setTextOrFallback("job-makeup-support", makeupSupport, "-");
+        setTextOrFallback("job-belongings", belongings, "-");
+        setTextOrFallback("job-media", media, "-");
+        setTextOrFallback("job-usage-period", usagePeriod, "-");
+        setTextOrFallback("job-competition", competition, "-");
         setText("job-remaining-days", remainingDays);
-        setTextOrFallback("job-selection-method", selectionMethod, "未記載");
+        setTextOrFallback("job-selection-method", selectionMethod, "-");
 
         if (thumbnailEl) {
           if (thumbnail) {

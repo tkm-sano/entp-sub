@@ -8,7 +8,9 @@ const SHEET_NAMES = {
   jobs: "jobs"
 };
 
+const API_BUILD = "2026-03-26-2";
 const GITHUB_API_BASE = "https://api.github.com";
+const TZ = "Asia/Tokyo";
 
 /* =========================================
    Spreadsheet Menu
@@ -26,7 +28,7 @@ function runGitHubActionsFromMenu_() {
   const ref = getDefaultGitHubRef_();
 
   try {
-    const result = triggerGitHubWorkflowDispatch_(ref);
+    triggerGitHubWorkflowDispatch_(ref);
     ui.alert("GitHub Actions を起動しました。");
   } catch (err) {
     ui.alert(
@@ -64,10 +66,7 @@ function triggerGitHubWorkflowDispatch_(ref) {
   }
 
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`;
-  const payload = {
-    ref,
-    inputs
-  };
+  const payload = { ref, inputs };
 
   const res = UrlFetchApp.fetch(url, {
     method: "post",
@@ -141,8 +140,9 @@ function buildGitHubDispatchErrorMessage_(statusCode, body, owner, repo, workflo
 
 function mustGetScriptProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
-  if (!value)
+  if (!value) {
     throw apiError_("config_error", `${key} 未設定`);
+  }
   return value;
 }
 
@@ -150,8 +150,13 @@ function mustGetScriptProperty_(key) {
    Entry
 ========================================= */
 
-function doGet(e) { return handleRequest_(e); }
-function doPost(e) { return handleRequest_(e); }
+function doGet(e) {
+  return handleRequest_(e);
+}
+
+function doPost(e) {
+  return handleRequest_(e);
+}
 
 /* =========================================
    Router
@@ -165,23 +170,20 @@ function handleRequest_(e) {
     callback = sanitizeCallback_(params.callback);
     const action = String(params.action || "").trim();
 
-    if (!action)
+    if (!action) {
       throw apiError_("invalid_action", "action 必須");
+    }
 
     let payload;
 
     if (action === "health") {
-      payload = { ok: true };
-
+      payload = { ok: true, build: API_BUILD };
     } else if (action === "login") {
       payload = login_(params);
-
     } else if (action === "listJobs") {
       payload = listJobs_(params);
-
     } else if (action === "apply") {
       payload = apply_(params);
-
     } else {
       throw apiError_("invalid_action", "未対応 action");
     }
@@ -205,36 +207,39 @@ function login_(params) {
   const name = String(params.name || "").trim();
   const password = String(params.password || "").trim();
 
-  if (!name || !password)
+  if (!name || !password) {
     throw apiError_("invalid_credentials", "認証情報不足");
+  }
 
-  if (password !== getLoginPassword_())
+  if (password !== getLoginPassword_()) {
     throw apiError_("invalid_credentials", "パスワード不一致");
+  }
 
   const users = readUsers_();
   const user = users.find(u => u.name === name);
 
-  if (!user)
+  if (!user) {
     throw apiError_("invalid_credentials", "ユーザー不存在");
+  }
 
   const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
 
   const token = signToken_({
-    uid:  user.uid,
+    uid: user.uid,
     name: user.name,
     role: "talent",
     email: user.email,
-    exp:  expiresAt
+    exp: expiresAt
   });
 
   return {
     ok: true,
     session: {
       token,
-      uid:      user.uid,
-      name:     user.name,
-      role:     "talent",
-      email:    user.email,
+      uid: user.uid,
+      name: user.name,
+      role: "talent",
+      email: user.email,
       expiresAt
     }
   };
@@ -245,35 +250,49 @@ function login_(params) {
 ========================================= */
 
 function readUsers_() {
-  const id = getProperty_("TALENT_SPREADSHEET_ID");
-  const sheetName = getProperty_("TALENT_SHEET_NAME") || "名簿";
+  const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
+  const sheetName = getOptionalProperty_("TALENT_SHEET_NAME");
 
   const ss = SpreadsheetApp.openById(id);
-  const sheet = ss.getSheetByName(sheetName);
+  const sheet = sheetName ? ss.getSheetByName(sheetName) : findSheetWithHeader_(ss, "名前");
 
-  if (!sheet)
+  if (!sheet) {
     throw apiError_("config_error", "名簿シート不存在");
+  }
 
   const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return [];
+  if (values.length < 2) {
+    return [];
+  }
 
   const headers = values[0].map(h => String(h).trim());
 
-  const nameCol    = headers.indexOf("名前");
-  const instaCol   = headers.indexOf("instagram_url");
-  const pageUrlCol = headers.indexOf("個別ページURL");
+  const nameCol = findColumn_(headers, "名前");
+  const emailCol = findColumn_(
+    headers,
+    "email",
+    "メールアドレス",
+    "E-mail",
+    "Email",
+    "mail",
+    "instagram_url"
+  );
+  const pageUrlCol = findColumn_(headers, "個別ページURL", "page_url", "profile_url");
 
-  if (nameCol < 0)
+  if (nameCol < 0) {
     throw apiError_("config_error", "名前列不存在");
+  }
 
   return values.slice(1).map(row => {
     const name = String(row[nameCol] || "").trim();
-    if (!name) return null;
+    if (!name) {
+      return null;
+    }
 
     return {
-      uid:     hash_(name),
+      uid: hash_(name),
       name,
-      email:   instaCol   >= 0 ? String(row[instaCol]   || "").trim() : "",
+      email: emailCol >= 0 ? String(row[emailCol] || "").trim() : "",
       pageUrl: pageUrlCol >= 0 ? String(row[pageUrlCol] || "").trim() : ""
     };
   }).filter(Boolean);
@@ -286,94 +305,86 @@ function readUsers_() {
 function listJobs_(params) {
   verifyToken_(params.token);
 
-  const id = getProperty_("SPREADSHEET_ID");
-  const ss = SpreadsheetApp.openById(id);
-  const sheet = ss.getSheetByName("jobs");
+  const sheet = getJobsSheet_();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
 
-  if (!sheet)
-    throw apiError_("config_error", "jobs シート不存在");
-
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2)
+  if (values.length < 2) {
     return { ok: true, jobs: [] };
+  }
 
   const headers = values[0].map(h => String(h).trim());
-  
-  // デバッグ: ヘッダー列を表示
-  console.log('Spreadsheet Headers:', JSON.stringify(headers));
+  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
-  const findColumn = (primary, ...fallbacks) => {
-    let i = headers.indexOf(primary);
-    if (i >= 0) return i;
-    for (const fb of fallbacks) {
-      i = headers.indexOf(fb);
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
-
-  const titleCol        = findColumn("案件名", "title");
+  const jobIdCol        = findColumn("job_id", "id");
+  const titleCol        = findColumn("案件名", "title", "案件タイトル");
   const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
-  const durationCol     = findColumn("拘束時間", "duration");
+  const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
   const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
-  const dateCol         = findColumn("実施日時", "date");
-  const locationCol     = findColumn("実施場所", "location");
+  const dateCol         = findColumn("実施日時", "date", "candidate_shoot_dates");
+  const locationCol     = findColumn("実施場所", "location", "shoot_location");
   const requirementsCol = findColumn("応募条件", "requirements");
-  const maxCol          = findColumn("募集人数", "max_applicants");
-  const descriptionCol  = findColumn("案件説明", "description");
+  const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
+  const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
   const conceptCol      = findColumn("コンセプト", "concept");
-  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "makeup");
-  const belongingsCol   = findColumn("持ち物", "belongings");
-  const mediaCol        = findColumn("媒体", "media");
-  const periodCol       = findColumn("使用期間", "period");
-  const competitionCol  = findColumn("競合", "competition");
-  const remainingCol    = findColumn("残り日数", "deadline");
+  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
+  const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
+  const mediaCol        = findColumn("媒体", "media", "media_usage");
+  const periodCol       = findColumn("使用期間", "period", "usage_period");
+  const competitionCol  = findColumn("競合", "competition", "competition_presence");
+  const remainingCol    = findColumn("残り日数");
   const selectionCol    = findColumn("選考方法", "selection_method");
-  const deadlineCol     = remainingCol;  // 互換性のため
-  const emailCol        = findColumn("client_email");
+  const deadlineCol     = findColumn("締切日", "deadline", "締切");
+  const emailCol        = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
   const formCol         = findColumn("form_url");
   const categoryCol     = findColumn("category");
   const countCol        = findColumn("applicant_count");
-  const notifiedCol     = findColumn("deadline_notified_at");
-  const applicantsCol   = findColumn("applicants");
-  const applicantUrlCol = findColumn("applicant_url");
+  const notifiedCol     = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
+  const applicantsCol   = findColumn("applicants", "応募者", "応募者名");
 
-  // デバッグ: 見つかった列インデックスを表示
-  console.log(`titleCol: ${titleCol}, deadlineCol: ${deadlineCol}, maxCol: ${maxCol}`);
-
-  if (titleCol < 0)
+  if (titleCol < 0) {
     throw apiError_("config_error", "案件名列が見つかりません");
+  }
 
-  const colValue = (row, colIndex, fallback = "") => (colIndex >= 0 ? row[colIndex] : fallback);
+  const jobs = values.slice(1).map((row, i) => {
+    const displayRow = displayValues[i + 1] || [];
+    const generatedId = getJobIdFromRow_(row, displayRow, headers, i + 2);
 
-  const jobs = values.slice(1).map((row, i) => ({
-    id:                   "job_" + (i + 2),
-    title:                row[titleCol],
-    reward:               colValue(row, rewardCol, ""),
-    duration:             colValue(row, durationCol, ""),
-    hourly_wage:          colValue(row, hourlyWageCol, ""),
-    date:                 colValue(row, dateCol, ""),
-    location:             colValue(row, locationCol, ""),
-    requirements:         colValue(row, requirementsCol, ""),
-    max_applicants:       colValue(row, maxCol, ""),
-    description:          colValue(row, descriptionCol, ""),
-    concept:              colValue(row, conceptCol, ""),
-    makeup:               colValue(row, makeupCol, ""),
-    belongings:           colValue(row, belongingsCol, ""),
-    media:                colValue(row, mediaCol, ""),
-    period:               colValue(row, periodCol, ""),
-    competition:          colValue(row, competitionCol, ""),
-    remaining:            colValue(row, remainingCol, ""),
-    selection_method:     colValue(row, selectionCol, ""),
-    deadline:             colValue(row, deadlineCol, ""),
-    client_email:         colValue(row, emailCol, ""),
-    form_url:             colValue(row, formCol, ""),
-    category:             colValue(row, categoryCol, ""),
-    applicant_count:      colValue(row, countCol, 0),
-    deadline_notified_at: colValue(row, notifiedCol, ""),
-    applicants:           colValue(row, applicantsCol, ""),
-    applicant_url:        colValue(row, applicantUrlCol, "")
-  }));
+    const deadlineText = colDisplay_(displayRow, deadlineCol, "");
+    const remainingText = colDisplay_(displayRow, remainingCol, "");
+    const computedRemaining = calculateRemainingDaysLabel_(colValue_(row, deadlineCol, ""));
+    const remaining = computedRemaining || remainingText;
+
+    return {
+      id: generatedId,
+      job_id: generatedId,
+      title: colDisplay_(displayRow, titleCol, ""),
+      reward: colDisplay_(displayRow, rewardCol, ""),
+      duration: colDisplay_(displayRow, durationCol, ""),
+      hourly_wage: colDisplay_(displayRow, hourlyWageCol, ""),
+      date: colDisplay_(displayRow, dateCol, ""),
+      location: colDisplay_(displayRow, locationCol, ""),
+      requirements: colDisplay_(displayRow, requirementsCol, ""),
+      max_applicants: colDisplay_(displayRow, maxCol, ""),
+      description: colDisplay_(displayRow, descriptionCol, ""),
+      concept: colDisplay_(displayRow, conceptCol, ""),
+      makeup: colDisplay_(displayRow, makeupCol, ""),
+      belongings: colDisplay_(displayRow, belongingsCol, ""),
+      media: colDisplay_(displayRow, mediaCol, ""),
+      period: colDisplay_(displayRow, periodCol, ""),
+      competition: colDisplay_(displayRow, competitionCol, ""),
+      remaining: remaining,
+      selection_method: colDisplay_(displayRow, selectionCol, ""),
+      deadline: deadlineText,
+      client_email: colDisplay_(displayRow, emailCol, ""),
+      form_url: colDisplay_(displayRow, formCol, ""),
+      category: colDisplay_(displayRow, categoryCol, ""),
+      applicant_count: colValue_(row, countCol, 0),
+      deadline_notified_at: colDisplay_(displayRow, notifiedCol, ""),
+      applicants: colDisplay_(displayRow, applicantsCol, "")
+    };
+  });
 
   return { ok: true, jobs };
 }
@@ -384,100 +395,97 @@ function listJobs_(params) {
 
 function apply_(params) {
   const tokenPayload = verifyToken_(params.token);
-  const jobId        = String(params.jobId        || "").trim();
-  const contactEmail = String(params.contactEmail || "").trim();
+  const jobId = String(params.jobId || "").trim();
   const acceptedCancelPolicy = String(params.acceptedCancelPolicy || "").trim().toLowerCase() === "true";
 
-  if (!jobId)
+  if (!jobId) {
     throw apiError_("invalid_param", "jobId 必須");
-
-  if (!acceptedCancelPolicy)
-    throw apiError_("consent_required", "キャンセルポリシーの確認が必要です");
-
-  if (!contactEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))
-    throw apiError_("invalid_email", "メールアドレスが不正です");
-
-  const id    = getProperty_("SPREADSHEET_ID");
-  const ss    = SpreadsheetApp.openById(id);
-  const sheet = ss.getSheetByName("jobs");
-
-  if (!sheet)
-    throw apiError_("config_error", "jobs シート不存在");
-
-  const values  = sheet.getDataRange().getValues();
-  const headers = values[0].map(h => String(h).trim());
-
-  const findColumn = (primary, ...fallbacks) => {
-    let i = headers.indexOf(primary);
-    if (i >= 0) return i;
-    for (const fb of fallbacks) {
-      i = headers.indexOf(fb);
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
-
-  const titleCol          = findColumn("案件名", "title");
-  const deadlineCol       = findColumn("残り日数", "deadline");
-  const maxCol            = findColumn("募集人数", "max_applicants");
-  const countCol          = findColumn("applicant_count");
-  const applicantsCol     = findColumn("applicants");
-  const applicantUrlCol   = findColumn("applicant_url");
-
-  if (titleCol < 0)
-    throw apiError_("config_error", "案件名列が見つかりません");
-  if (applicantsCol < 0)
-    throw apiError_("config_error", "applicants 列不存在");
-
-  const rowIndex = parseInt(jobId.replace("job_", ""), 10) - 2;
-  if (rowIndex < 0 || rowIndex >= values.length - 1)
-    throw apiError_("not_found", "案件が見つかりません");
-
-  const row      = values[rowIndex + 1];
-  const deadline = row[deadlineCol];
-  const max      = Number(row[maxCol]   || 0);
-  let   count    = Number(row[countCol] || 0);
-  const title    = String(row[titleCol] || "");
-
-  if (deadline && new Date(deadline) < new Date())
-    throw apiError_("deadline_passed", "応募締切を過ぎています");
-
-  if (max > 0 && count >= max)
-    throw apiError_("quota_full", "定員に達しています");
-
-  // 既存の応募者名リストを取得
-  const existingApplicantsText = String(row[applicantsCol] || "").trim();
-  const applicantsList = existingApplicantsText ? existingApplicantsText.split("\n").map(s => s.trim()).filter(Boolean) : [];
-  
-  // 既に応募済みかチェック
-  const alreadyApplied = applicantsList.includes(tokenPayload.name);
-  if (alreadyApplied)
-    throw apiError_("already_applied", "既に応募済みです");
-
-  // 名簿から該当ユーザーのURLを取得
-  const users = readUsers_();
-  const user = users.find(u => u.uid === tokenPayload.uid);
-  const userUrl = user?.pageUrl || "";
-
-  // 応募者名を追加
-  applicantsList.push(tokenPayload.name);
-  
-  // URLリストを更新
-  const existingUrlsText = applicantUrlCol >= 0 ? String(row[applicantUrlCol] || "").trim() : "";
-  const urlsList = existingUrlsText ? existingUrlsText.split("\n").map(s => s.trim()).filter(Boolean) : [];
-  urlsList.push(userUrl);
-
-  const sheetRow = rowIndex + 2;
-  sheet.getRange(sheetRow, countCol + 1).setValue(count + 1);
-  sheet.getRange(sheetRow, applicantsCol + 1).setValue(applicantsList.join("\n"));
-  
-  if (applicantUrlCol >= 0) {
-    sheet.getRange(sheetRow, applicantUrlCol + 1).setValue(urlsList.join("\n"));
   }
 
-  sendConfirmationEmail_(contactEmail, tokenPayload.name, title, deadline);
+  if (!acceptedCancelPolicy) {
+    throw apiError_("consent_required", "キャンセルポリシーの確認が必要です");
+  }
 
-  return { ok: true, applicantCount: count + 1 };
+  const contactEmail = resolveApplicantEmail_(params, tokenPayload);
+  if (!contactEmail || !isValidEmail_(contactEmail)) {
+    throw apiError_("invalid_email", "メールアドレスが不正です");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const sheet = getJobsSheet_();
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) {
+      throw apiError_("not_found", "案件が見つかりません");
+    }
+
+    const headers = values[0].map(h => String(h).trim());
+    const findColumn = (...candidates) => findColumn_(headers, ...candidates);
+
+    const titleCol      = findColumn("案件名", "title");
+    const deadlineCol   = findColumn("締切日", "deadline", "締切");
+    const maxCol        = findColumn("募集人数", "max_applicants");
+    const countCol      = findColumn("applicant_count");
+    const applicantsCol = findColumn("applicants", "応募者", "応募者名");
+    const jobIdCol      = findColumn("job_id", "id");
+
+    if (titleCol < 0) {
+      throw apiError_("config_error", "案件名列が見つかりません");
+    }
+    if (applicantsCol < 0) {
+      throw apiError_("config_error", "applicants 列不存在");
+    }
+
+    const rowIndex = findJobRowIndex_(values, headers, jobId);
+    if (rowIndex < 1) {
+      throw apiError_("not_found", "案件が見つかりません");
+    }
+
+    const row = values[rowIndex];
+    const sheetRow = rowIndex + 1;
+
+    const deadline = deadlineCol >= 0 ? row[deadlineCol] : "";
+    const max = normalizeNumber_(maxCol >= 0 ? row[maxCol] : 0);
+    const title = String(row[titleCol] || "");
+    const explicitJobId = jobIdCol >= 0 ? String(row[jobIdCol] || "").trim() : "";
+
+    const existingApplicantsText = String(row[applicantsCol] || "").trim();
+    const applicantsList = splitLines_(existingApplicantsText);
+    const currentCount = countCol >= 0 ? normalizeNumber_(row[countCol]) : applicantsList.length;
+
+    if (isDeadlinePassed_(deadline)) {
+      throw apiError_("deadline_passed", "応募締切を過ぎています");
+    }
+
+    if (max > 0 && currentCount >= max) {
+      throw apiError_("quota_full", "定員に達しています");
+    }
+
+    if (applicantsList.includes(tokenPayload.name)) {
+      throw apiError_("already_applied", "既に応募済みです");
+    }
+
+    applicantsList.push(tokenPayload.name);
+    const newCount = applicantsList.length;
+
+    if (countCol >= 0) {
+      sheet.getRange(sheetRow, countCol + 1).setValue(newCount);
+    }
+    sheet.getRange(sheetRow, applicantsCol + 1).setValue(applicantsList.join("\n"));
+
+    sendConfirmationEmail_(contactEmail, tokenPayload.name, title, deadline);
+
+    return {
+      ok: true,
+      job_id: explicitJobId || jobId,
+      applicantCount: newCount
+    };
+
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* =========================================
@@ -486,17 +494,24 @@ function apply_(params) {
 
 function sendConfirmationEmail_(to, name, jobTitle, deadline) {
   let deadlineStr = "未定";
-  if (deadline) {
-    const d = new Date(deadline);
-    if (!isNaN(d.getTime())) {
-      deadlineStr = Utilities.formatDate(d, "Asia/Tokyo", "yyyy年MM月dd日");
-    } else {
-      deadlineStr = String(deadline);
-    }
+  const d = parseDate_(deadline);
+
+  if (d) {
+    deadlineStr = Utilities.formatDate(d, TZ, "yyyy年MM月dd日");
+  } else if (deadline) {
+    deadlineStr = String(deadline);
   }
 
   const subject = `【応募確認】${jobTitle}`;
-  const body    = `${name} 様\n\n「${jobTitle}」へのご応募を受け付けました。\n\n締切：${deadlineStr}\n\nご不明な点はご連絡ください。`;
+  const body = [
+    `${name} 様`,
+    "",
+    `「${jobTitle}」へのご応募を受け付けました。`,
+    "",
+    `締切：${deadlineStr}`,
+    "",
+    "ご不明な点はご連絡ください。"
+  ].join("\n");
 
   GmailApp.sendEmail(to, subject, body);
 }
@@ -506,72 +521,70 @@ function sendConfirmationEmail_(to, name, jobTitle, deadline) {
 ========================================= */
 
 function notifyDeadlinePassed() {
-  const id    = getProperty_("SPREADSHEET_ID");
-  const ss    = SpreadsheetApp.openById(id);
-  const sheet = ss.getSheetByName("jobs");
+  const sheet = getJobsSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) {
+    return;
+  }
 
-  if (!sheet) return;
-
-  const values  = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
+  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
-  const findColumn = (primary, ...fallbacks) => {
-    let i = headers.indexOf(primary);
-    if (i >= 0) return i;
-    for (const fb of fallbacks) {
-      i = headers.indexOf(fb);
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
-
-  const titleCol          = findColumn("案件名", "title");
-  const deadlineCol       = findColumn("残り日数", "deadline");
-  const emailCol          = findColumn("client_email");
-  const applicantsCol     = findColumn("applicants");
-  const applicantUrlCol   = findColumn("applicant_url");
-  const notifiedCol       = findColumn("deadline_notified_at");
+  const titleCol      = findColumn("案件名", "title");
+  const deadlineCol   = findColumn("締切日", "deadline", "締切");
+  const emailCol      = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
+  const applicantsCol = findColumn("applicants", "応募者", "応募者名");
+  const notifiedCol   = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
 
   if (titleCol < 0 || deadlineCol < 0 || emailCol < 0 || applicantsCol < 0 || notifiedCol < 0) {
     return;
   }
 
   const now = new Date();
+  const users = readUsers_();
+  const pageUrlByName = {};
+
+  users.forEach(user => {
+    if (user?.name) {
+      pageUrlByName[user.name] = String(user.pageUrl || "").trim();
+    }
+  });
 
   values.slice(1).forEach((row, i) => {
-    const deadline    = row[deadlineCol];
-    const notified    = row[notifiedCol];
+    const deadline = row[deadlineCol];
+    const notified = row[notifiedCol];
     const clientEmail = String(row[emailCol] || "").trim();
-    const title       = String(row[titleCol] || "");
+    const title = String(row[titleCol] || "");
 
-    if (!deadline)    return;
-    if (notified)     return;
-    if (!clientEmail) return;
+    if (!deadline || notified || !clientEmail) {
+      return;
+    }
 
-    const deadlineDate = new Date(deadline);
-    if (isNaN(deadlineDate.getTime())) return;
+    const deadlineDate = parseDate_(deadline);
+    if (!deadlineDate) {
+      return;
+    }
 
     const nextDay = new Date(deadlineDate);
     nextDay.setDate(nextDay.getDate() + 1);
     nextDay.setHours(0, 0, 0, 0);
-    if (now < nextDay) return;
 
-    // 応募者名とURLをテキスト形式で取得
+    if (now < nextDay) {
+      return;
+    }
+
     const applicantsText = String(row[applicantsCol] || "").trim();
-    const applicantUrlText = applicantUrlCol >= 0 ? String(row[applicantUrlCol] || "").trim() : "";
-    
-    const names = applicantsText ? applicantsText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
-    const urls = applicantUrlText ? applicantUrlText.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean) : [];
+    const names = splitLines_(applicantsText);
 
-    const applicantLines = names.map((name, index) => {
-      const url = urls[index] || "（URLなし）";
+    const applicantLines = names.map(name => {
+      const url = pageUrlByName[name] || "（URLなし）";
       return `・${name}\n  ${url}`;
     });
 
-    const deadlineStr = Utilities.formatDate(deadlineDate, "Asia/Tokyo", "yyyy年MM月dd日");
+    const deadlineStr = Utilities.formatDate(deadlineDate, TZ, "yyyy年MM月dd日");
 
     const subject = `【応募者一覧】${title}`;
-    const body    = [
+    const body = [
       `「${title}」の締切（${deadlineStr}）が過ぎました。`,
       `応募者数：${names.length}名`,
       "",
@@ -580,9 +593,13 @@ function notifyDeadlinePassed() {
     ].join("\n");
 
     GmailApp.sendEmail(clientEmail, subject, body);
-
     sheet.getRange(i + 2, notifiedCol + 1).setValue(new Date().toISOString());
   });
+}
+
+// README互換のトリガー名
+function sendDeadlineMorningEmails() {
+  notifyDeadlinePassed();
 }
 
 /* =========================================
@@ -593,32 +610,51 @@ function signToken_(payload) {
   const json = JSON.stringify(payload);
   const blob = Utilities.newBlob(json, "application/json", "payload.json");
   const body = Utilities.base64EncodeWebSafe(blob.getBytes());
-  const sig  = Utilities.base64EncodeWebSafe(
+  const sig = Utilities.base64EncodeWebSafe(
     Utilities.computeHmacSha256Signature(body, getProperty_("APP_SECRET"))
   );
-  return body + "." + sig;
+  return `${body}.${sig}`;
 }
 
 function verifyToken_(token) {
-  if (!token)
+  if (!token) {
     throw apiError_("invalid_token", "token 不存在");
+  }
 
-  const [body, signature] = token.split(".");
+  const parts = String(token).split(".");
+  if (parts.length !== 2) {
+    throw apiError_("invalid_token", "token 形式不正");
+  }
+
+  const body = parts[0];
+  const signature = parts[1];
+
   const expected = Utilities.base64EncodeWebSafe(
     Utilities.computeHmacSha256Signature(body, getProperty_("APP_SECRET"))
   );
 
-  if (signature !== expected)
+  if (signature !== expected) {
     throw apiError_("invalid_token", "署名不一致");
+  }
 
-  const payload = JSON.parse(
-    Utilities.newBlob(
-      Utilities.base64DecodeWebSafe(body)
-    ).getDataAsString("UTF-8")  // UTF-8 を明示的に指定
-  );
+  let payload;
+  try {
+    payload = JSON.parse(
+      Utilities.newBlob(
+        Utilities.base64DecodeWebSafe(body)
+      ).getDataAsString("UTF-8")
+    );
+  } catch (err) {
+    throw apiError_("invalid_token", "token 解析失敗");
+  }
 
-  if (payload.exp <= Date.now())
+  if (!payload || typeof payload !== "object") {
+    throw apiError_("invalid_token", "token 内容不正");
+  }
+
+  if (payload.exp <= Date.now()) {
     throw apiError_("token_expired", "期限切れ");
+  }
 
   return payload;
 }
@@ -627,21 +663,203 @@ function verifyToken_(token) {
    Utilities
 ========================================= */
 
+function getJobsSheet_() {
+  const id = getProperty_("SPREADSHEET_ID");
+  const ss = SpreadsheetApp.openById(id);
+  const sheet = ss.getSheetByName(SHEET_NAMES.jobs);
+
+  if (!sheet) {
+    throw apiError_("config_error", `${SHEET_NAMES.jobs} シート不存在`);
+  }
+  return sheet;
+}
+
 function getProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
-  if (!value)
-    throw apiError_("config_error", key + " 未設定");
+  if (!value) {
+    throw apiError_("config_error", `${key} 未設定`);
+  }
   return value;
+}
+
+function getOptionalProperty_(key) {
+  const value = PropertiesService.getScriptProperties().getProperty(key);
+  return value == null ? "" : String(value).trim();
 }
 
 function getLoginPassword_() {
   return getProperty_("LOGIN_PASSWORD");
 }
 
+function findSheetWithHeader_(ss, headerName) {
+  const sheets = ss.getSheets();
+
+  for (const sheet of sheets) {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol <= 0) {
+      continue;
+    }
+
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+    if (headers.includes(headerName)) {
+      return sheet;
+    }
+  }
+
+  return null;
+}
+
+function findColumn_(headers, ...candidates) {
+  for (const candidate of candidates) {
+    const i = headers.indexOf(candidate);
+    if (i >= 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function colValue_(row, colIndex, fallback = "") {
+  return colIndex >= 0 ? row[colIndex] : fallback;
+}
+
+function colDisplay_(row, colIndex, fallback = "") {
+  return colIndex >= 0 ? row[colIndex] : fallback;
+}
+
+function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
+  const jobIdCol = findColumn_(headers, "job_id", "id");
+  const raw = jobIdCol >= 0 ? (displayRow[jobIdCol] || row[jobIdCol]) : "";
+  const explicitId = String(raw || "").trim();
+  return explicitId || `job_${sheetRowNumber}`;
+}
+
+function findJobRowIndex_(values, headers, jobId) {
+  const jobIdCol = findColumn_(headers, "job_id", "id");
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const explicitId = jobIdCol >= 0 ? String(row[jobIdCol] || "").trim() : "";
+    const fallbackId = `job_${i + 1}`;
+
+    if (jobId === explicitId || jobId === fallbackId) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+function resolveApplicantEmail_(params, tokenPayload) {
+  const paramEmail = String(params.contactEmail || "").trim();
+  const tokenEmail = String(tokenPayload?.email || "").trim();
+
+  if (tokenEmail && isValidEmail_(tokenEmail)) {
+    return tokenEmail;
+  }
+  return paramEmail;
+}
+
+function isValidEmail_(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function splitLines_(text) {
+  if (!text) {
+    return [];
+  }
+  return String(text)
+    .split(/[\r\n]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function parseDate_(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return new Date(value.getTime());
+  }
+
+  const text = String(value).trim();
+  if (!text) {
+    return null;
+  }
+
+  if (/^\d+\s*日$/.test(text)) {
+    return null;
+  }
+
+  const normalized = text.replace(/\./g, "/").replace(/-/g, "/");
+  const parsed = new Date(normalized);
+
+  if (isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isDeadlinePassed_(deadlineValue) {
+  const d = parseDate_(deadlineValue);
+  if (!d) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+
+  return d < today;
+}
+
+function calculateRemainingDaysLabel_(deadlineValue) {
+  const d = parseDate_(deadlineValue);
+  if (!d) {
+    return "";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+
+  const diffMs = d.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return "期限切れ";
+  }
+  return `${diffDays}日`;
+}
+
+function normalizeNumber_(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return 0;
+  }
+
+  const matched = text.match(/\d+/);
+  if (!matched) {
+    return 0;
+  }
+
+  const num = Number(matched[0]);
+  return Number.isFinite(num) ? num : 0;
+}
+
 function sanitizeCallback_(callback) {
-  if (!callback) return "";
-  if (!/^[a-zA-Z0-9_$.]+$/.test(callback))
+  if (!callback) {
+    return "";
+  }
+  if (!/^[a-zA-Z0-9_$.]+$/.test(callback)) {
     throw apiError_("invalid_callback", "callback 不正");
+  }
   return callback;
 }
 
@@ -651,6 +869,7 @@ function respond_(callback, payload) {
       .createTextOutput(`${callback}(${JSON.stringify(payload)})`)
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
+
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
@@ -658,7 +877,7 @@ function respond_(callback, payload) {
 
 function apiError_(code, message) {
   const e = new Error(message);
-  e.code  = code;
+  e.code = code;
   return e;
 }
 
@@ -667,5 +886,5 @@ function hash_(text) {
     Utilities.DigestAlgorithm.SHA_256,
     text
   );
-  return raw.map(b => ('0' + (b & 0xFF).toString(16)).slice(-2)).join('');
+  return raw.map(b => ("0" + (b & 0xFF).toString(16)).slice(-2)).join("");
 }

@@ -41,6 +41,23 @@ function getField(job, enName, jpName = null) {
   return String(job[enName] || job[jpName] || '').trim();
 }
 
+// 複数の候補キーから最初の値を取得（列名の揺れ対策）
+function getFirstField(job, keys = []) {
+  for (const key of keys) {
+    const value = job?.[key];
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function safeCount(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return 0;
+  const matched = text.match(/\d+/);
+  return matched ? safeNumber(matched[0]) : safeNumber(text);
+}
+
 // _jobsディレクトリを初期化
 if (fs.existsSync(jobsDir)) {
   // 既存のファイルを削除（古いデータをクリーンアップ）
@@ -58,7 +75,7 @@ let skippedCount = 0;
 
 jobs.forEach((job, index) => {
   // 案件タイトルを取得（英語か日本語の列名を試す）
-  const title = getField(job, 'title', '案件名');
+  const title = getFirstField(job, ['title', '案件名', '案件タイトル']);
   if (!title) {
     console.warn(`Warning: 行 ${index + 2} - 案件名が空のためスキップしました`);
     skippedCount++;
@@ -69,35 +86,53 @@ jobs.forEach((job, index) => {
   const rowNumber = index + 2; // ヘッダー行を除く
   const jobId = `job_${rowNumber}`;
   const filename = jobId;
-  const feeValue = getField(job, 'fee', '報酬（交通費込）') || getField(job, 'fee', '報酬');
-  const makeupValue = getField(job, 'makeup', 'メイク・ヘアメイクの有無') || getField(job, 'makeup', 'メイク・ヘアメイクスタッフの有無');
+  const categoryValue = getFirstField(job, ['category', 'カテゴリー', 'カテゴリ']);
+  const clientNameValue = getFirstField(job, ['client_name', 'クライアント名']);
+  const clientEmailValue = getFirstField(job, ['client_email', 'クライアントメール']);
+  const shootingContentValue = getFirstField(job, ['shooting_content', 'shoot_description', 'description', '案件説明']);
+  const conceptValue = getFirstField(job, ['concept', 'コンセプト']);
+  const shootingDatesValue = getFirstField(job, ['shooting_dates', 'candidate_shoot_dates', '実施日時', '日時']);
+  const durationValue = getFirstField(job, ['duration', 'duration_hours', '拘束時間']);
+  const shootingLocationValue = getFirstField(job, ['shooting_location', 'shoot_location', 'location', '実施場所', '場所']);
+  const usageMediaValue = getFirstField(job, ['usage_media', 'media_usage', 'media', '媒体']);
+  const usagePeriodValue = getFirstField(job, ['usage_period', 'period', '使用期間']);
+  const competitionValue = getFirstField(job, ['competition', 'competition_presence', '競合']);
+  const makeupValue = getFirstField(job, ['makeup', 'メイク・ヘアメイクの有無', 'メイク・ヘアメイクスタッフの有無']);
+  const feeValue = getFirstField(job, ['fee', '報酬（交通費込）', '報酬']);
+  const belongingsValue = getFirstField(job, ['belongings', 'items_to_bring', '持ち物']);
+  const maxApplicantsValue = getFirstField(job, ['max_applicants', '募集人数']);
+  const applicantCountValue = getFirstField(job, ['applicant_count', '応募者数', '応募数', '現在申し込まれている人数']);
+  const deadlineValue = getFirstField(job, ['deadline', '残り日数', '締切', '締切日']);
+  const formUrlValue = getFirstField(job, ['form_url', 'フォームURL', 'フォームurl']);
+  const deadlineNotifiedAtValue = getFirstField(job, ['deadline_notified_at', '通知日時']);
+  const detailHtmlValue = getFirstField(job, ['details', '詳細', '案件説明']) || '<p>案件詳細はここに記載</p>';
 
   // Code.gs で使用されるフィールドを全て含める（英語・日本語対応）
   const content = `---
 layout: job
 title: "${yamlString(title)}"
 job_id: "${yamlString(jobId)}"
-category: "${yamlString(getField(job, 'category', 'カテゴリー'))}"
-client_name: "${yamlString(getField(job, 'client_name', 'クライアント名'))}"
-client_email: "${yamlString(getField(job, 'client_email', 'クライアントメール'))}"
-shooting_content: "${yamlString(getField(job, 'shooting_content', '案件説明') || getField(job, 'description'))}"
-concept: "${yamlString(getField(job, 'concept', 'コンセプト'))}"
-shooting_dates: "${yamlString(getField(job, 'shooting_dates', '実施日時'))}"
-duration: "${yamlString(getField(job, 'duration', '拘束時間'))}"
-shooting_location: "${yamlString(getField(job, 'shooting_location', '実施場所') || getField(job, 'location'))}"
-usage_media: "${yamlString(getField(job, 'usage_media', '媒体'))}"
-usage_period: "${yamlString(getField(job, 'usage_period', '使用期間'))}"
-competition: "${yamlString(getField(job, 'competition', '競合'))}"
+category: "${yamlString(categoryValue)}"
+client_name: "${yamlString(clientNameValue)}"
+client_email: "${yamlString(clientEmailValue)}"
+shooting_content: "${yamlString(shootingContentValue)}"
+concept: "${yamlString(conceptValue)}"
+shooting_dates: "${yamlString(shootingDatesValue)}"
+duration: "${yamlString(durationValue)}"
+shooting_location: "${yamlString(shootingLocationValue)}"
+usage_media: "${yamlString(usageMediaValue)}"
+usage_period: "${yamlString(usagePeriodValue)}"
+competition: "${yamlString(competitionValue)}"
 makeup: "${yamlString(makeupValue)}"
 fee: "${yamlString(feeValue)}"
-belongings: "${yamlString(getField(job, 'belongings', '持ち物'))}"
-max_applicants: ${safeNumber(getField(job, 'max_applicants', '募集人数'))}
-applicant_count: ${safeNumber(getField(job, 'applicant_count', '応募者数'))}
-deadline: "${yamlString(getField(job, 'deadline', '残り日数'))}"
-form_url: "${yamlString(getField(job, 'form_url', 'フォームURL'))}"
-deadline_notified_at: "${yamlString(getField(job, 'deadline_notified_at', '通知日時'))}"
+belongings: "${yamlString(belongingsValue)}"
+max_applicants: ${safeCount(maxApplicantsValue)}
+applicant_count: ${safeCount(applicantCountValue)}
+deadline: "${yamlString(deadlineValue)}"
+form_url: "${yamlString(formUrlValue)}"
+deadline_notified_at: "${yamlString(deadlineNotifiedAtValue)}"
 ---
-${getField(job, 'details', '詳細') || '<p>案件詳細はここに記載</p>'}
+${detailHtmlValue}
 `;
 
   try {
