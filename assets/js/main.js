@@ -169,6 +169,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
+    const raw = String(deadline).trim();
+    if (/^\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
     const today = new Date();
     const d = new Date(deadline);
     if (isNaN(d.getTime())) return "未定";
@@ -231,8 +233,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     jobEls.jobsList.innerHTML = visible.map(job => {
       const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
-      const capacity = escapeHtml(String(job.max_applicants ?? job.maxApplicants ?? 0));
-      const current  = escapeHtml(String(job.applicant_count ?? job.applicantCount ?? 0));
+      const capacityRaw = Number(job.max_applicants ?? job.maxApplicants);
+      const currentRaw = Number(job.applicant_count ?? job.applicantCount);
+      const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
+      const current = Number.isFinite(currentRaw) ? `${currentRaw}人` : "0人";
       const rawJobId = String(job.job_id || job.id || "");
       const jobSlug = escapeHtml(rawJobId.trim().replace(/_/g, "-"));
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
@@ -262,11 +266,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
             </div>
             <div class="job-card__body">
-              <p class="job-card__deadline" style="color:red;">残り：${remainingDays}</p>
-              <p class="job-card__wage">時給：${hourlyWage}</p>
-              <p class="job-card__wage">ギャラ：${fee}</p>
-              <p class="job-card__count">募集人数：${capacity}</p>
-              <p class="job-card__count">現在申し込まれている人数：${current}</p>
+              <p class="job-card__meta-item job-card__deadline"><span class="job-card__meta-label">締切まで</span><span class="job-card__meta-value">${escapeHtml(remainingDays)}</span></p>
+              <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">時給</span><span class="job-card__meta-value">${escapeHtml(hourlyWage)}</span></p>
+              <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">報酬</span><span class="job-card__meta-value">${fee}</span></p>
+              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">募集枠</span><span class="job-card__meta-value">${escapeHtml(capacity)}</span></p>
+              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">応募数</span><span class="job-card__meta-value">${escapeHtml(current)}</span></p>
             </div>
             <div class="job-card__footer"></div>
           </div>

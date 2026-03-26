@@ -172,6 +172,8 @@
 
       function calculateRemainingDays(deadline) {
         if (!deadline) return "未定";
+        const raw = String(deadline).trim();
+        if (/^\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
         const today = new Date();
         const d = new Date(deadline);
         if (isNaN(d.getTime())) return "未定";
@@ -239,6 +241,7 @@
           job.makeup_staff,
           job.hair_makeup_staff,
           job.make_hair_makeup,
+          job["メイク・ヘアメイクの有無"],
           job["メイク・ヘアメイクスタッフの有無"]
         );
         
@@ -255,7 +258,8 @@
         const competition = pickFirst(job.competition, job.conflict, job["競合"]);
         
         // 残り日数
-        const remainingDays = calculateRemainingDays(job.deadline);
+        const remainingSource = pickFirst(job.remaining, job["残り日数"], job.deadline);
+        const remainingDays = calculateRemainingDays(remainingSource);
         
         // 選考方法
         const selectionMethod = pickFirst(job.selection_method, job.selection_process, job.method, job["選考方法"]);

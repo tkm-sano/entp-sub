@@ -210,23 +210,6 @@ button[disabled] {
   margin: 0;
   color: var(--muted);
 }
-}
-
-.jobs-header {
-  flex-direction: row;
-  text-align: center;
-  gap: 0.8rem;
-  margin-bottom: 0.45rem;
-}
-
-.jobs-header h2 {
-  margin: 0;
-}
-
-.jobs-subtitle {
-  margin: 0;
-  color: var(--muted);
-}
 
 .jobs-pagination {
   margin-top: 1rem;
@@ -452,6 +435,26 @@ body[data-page="login"] .system-message {
   margin: 0;
 }
 
+.job-card__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.job-card__meta-label {
+  font-weight: 600;
+  color: #222;
+}
+
+.job-card__meta-value {
+  color: var(--muted);
+}
+
+.job-card__deadline .job-card__meta-label,
+.job-card__deadline .job-card__meta-value {
+  color: #d32424;
+}
+
 .job-card__footer {
   display: flex;
   justify-content: center;
@@ -473,10 +476,20 @@ body[data-page="login"] .system-message {
   transition: background 0.15s, color 0.15s;
 }
 
+#logout-button {
+  border: none;
+  color: var(--text);
+  text-decoration: underline;
+}
+
 #logout-button:hover:not(:disabled),
 .details-button:hover {
   background: #f2f2f2;
   color: #000000;
+}
+
+#logout-button:hover:not(:disabled) {
+  color: var(--text);
 }
 
 .apply-button {
@@ -1045,6 +1058,34 @@ body[data-page="jobs"] .apply-button {
 
   body[data-page="jobs"] .job-card__body {
     padding: 0 0.8rem 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.38rem;
+  }
+
+  body[data-page="jobs"] .job-card__meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px dashed #dcdcdc;
+  }
+
+  body[data-page="jobs"] .job-card__meta-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  body[data-page="jobs"] .job-card__meta-label {
+    font-size: 0.8rem;
+    letter-spacing: 0.01em;
+    color: #111;
+  }
+
+  body[data-page="jobs"] .job-card__meta-value {
+    font-size: 0.84rem;
+    text-align: right;
   }
 
   body[data-page="jobs"] .job-card__title,
@@ -1151,6 +1192,14 @@ body[data-page="jobs"] .apply-button {
 
   body[data-page="jobs"] .job-card__title {
     font-size: 0.95rem;
+  }
+
+  body[data-page="jobs"] .job-card__meta-label {
+    font-size: 0.75rem;
+  }
+
+  body[data-page="jobs"] .job-card__meta-value {
+    font-size: 0.78rem;
   }
 }
 

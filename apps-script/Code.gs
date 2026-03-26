@@ -344,33 +344,35 @@ function listJobs_(params) {
   if (titleCol < 0)
     throw apiError_("config_error", "案件名列が見つかりません");
 
+  const colValue = (row, colIndex, fallback = "") => (colIndex >= 0 ? row[colIndex] : fallback);
+
   const jobs = values.slice(1).map((row, i) => ({
     id:                   "job_" + (i + 2),
     title:                row[titleCol],
-    reward:               row[rewardCol] >= 0 ? row[rewardCol] : "",
-    duration:             row[durationCol] >= 0 ? row[durationCol] : "",
-    hourly_wage:          row[hourlyWageCol] >= 0 ? row[hourlyWageCol] : "",
-    date:                 row[dateCol] >= 0 ? row[dateCol] : "",
-    location:             row[locationCol] >= 0 ? row[locationCol] : "",
-    requirements:         row[requirementsCol] >= 0 ? row[requirementsCol] : "",
-    max_applicants:       row[maxCol] >= 0 ? row[maxCol] : "",
-    description:          row[descriptionCol] >= 0 ? row[descriptionCol] : "",
-    concept:              row[conceptCol] >= 0 ? row[conceptCol] : "",
-    makeup:               row[makeupCol] >= 0 ? row[makeupCol] : "",
-    belongings:           row[belongingsCol] >= 0 ? row[belongingsCol] : "",
-    media:                row[mediaCol] >= 0 ? row[mediaCol] : "",
-    period:               row[periodCol] >= 0 ? row[periodCol] : "",
-    competition:          row[competitionCol] >= 0 ? row[competitionCol] : "",
-    remaining:            row[remainingCol] >= 0 ? row[remainingCol] : "",
-    selection_method:     row[selectionCol] >= 0 ? row[selectionCol] : "",
-    deadline:             row[deadlineCol] >= 0 ? row[deadlineCol] : "",
-    client_email:         row[emailCol] >= 0 ? row[emailCol] : "",
-    form_url:             row[formCol] >= 0 ? row[formCol] : "",
-    category:             row[categoryCol] >= 0 ? row[categoryCol] : "",
-    applicant_count:      row[countCol] >= 0 ? row[countCol] : 0,
-    deadline_notified_at: row[notifiedCol] >= 0 ? row[notifiedCol] : "",
-    applicants:           applicantsCol >= 0 ? row[applicantsCol] : "",
-    applicant_url:        applicantUrlCol >= 0 ? row[applicantUrlCol] : ""
+    reward:               colValue(row, rewardCol, ""),
+    duration:             colValue(row, durationCol, ""),
+    hourly_wage:          colValue(row, hourlyWageCol, ""),
+    date:                 colValue(row, dateCol, ""),
+    location:             colValue(row, locationCol, ""),
+    requirements:         colValue(row, requirementsCol, ""),
+    max_applicants:       colValue(row, maxCol, ""),
+    description:          colValue(row, descriptionCol, ""),
+    concept:              colValue(row, conceptCol, ""),
+    makeup:               colValue(row, makeupCol, ""),
+    belongings:           colValue(row, belongingsCol, ""),
+    media:                colValue(row, mediaCol, ""),
+    period:               colValue(row, periodCol, ""),
+    competition:          colValue(row, competitionCol, ""),
+    remaining:            colValue(row, remainingCol, ""),
+    selection_method:     colValue(row, selectionCol, ""),
+    deadline:             colValue(row, deadlineCol, ""),
+    client_email:         colValue(row, emailCol, ""),
+    form_url:             colValue(row, formCol, ""),
+    category:             colValue(row, categoryCol, ""),
+    applicant_count:      colValue(row, countCol, 0),
+    deadline_notified_at: colValue(row, notifiedCol, ""),
+    applicants:           colValue(row, applicantsCol, ""),
+    applicant_url:        colValue(row, applicantUrlCol, "")
   }));
 
   return { ok: true, jobs };
