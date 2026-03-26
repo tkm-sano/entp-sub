@@ -183,6 +183,28 @@
         return `${diffDays} 日`;
       }
 
+      function formatImplementationDate(value) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) return "";
+
+        const jpDateMatch = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+        if (jpDateMatch) {
+          const month = Number(jpDateMatch[2]);
+          const day = Number(jpDateMatch[3]);
+          if (Number.isFinite(month) && Number.isFinite(day)) {
+            return `${month}月${day}日`;
+          }
+        }
+
+        const normalized = raw.replace(/\./g, "-").replace(/\//g, "-");
+        const parsed = new Date(normalized);
+        if (!Number.isNaN(parsed.getTime())) {
+          return `${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+        }
+
+        return raw;
+      }
+
       function renderJob(job) {
         // 報酬総額
         const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job["報酬"]);
@@ -200,7 +222,7 @@
         const hourlyWage = Number.isFinite(hourlyWageNumber) ? `${hourlyWageNumber.toLocaleString()}円/時` : hourlyWageValue;
         
         // 実施日時
-        const implementationDate = pickFirst(
+        const implementationDateRaw = pickFirst(
           job.implementation_date,
           job.execution_date,
           job.date,
@@ -208,6 +230,7 @@
           job["実施日時"],
           job["日時"]
         );
+        const implementationDate = formatImplementationDate(implementationDateRaw);
         
         // 実施場所
         const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);

@@ -1604,13 +1604,16 @@ body[data-page="job"] {
   }
 
   .job-detail-item {
+    flex-direction: column;
+    align-items: stretch;
     padding: 6px 4px;
     font-size: 13px;
     gap: 5px;
   }
 
   .job-detail-label {
-    flex-basis: 160px;
+    flex-basis: auto;
+    width: 100%;
     font-size: 12px;
     max-width: 100%;
   }
