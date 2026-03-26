@@ -16,8 +16,8 @@ const GITHUB_API_BASE = "https://api.github.com";
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu("運用")
-    .addItem("GitHub Actions 実行", "runGitHubActionsFromMenu_")
+    .createMenu("更新")
+    .addItem("編集をWebページに反映", "runGitHubActionsFromMenu_")
     .addToUi();
 }
 
@@ -27,7 +27,7 @@ function runGitHubActionsFromMenu_() {
 
   try {
     const result = triggerGitHubWorkflowDispatch_(ref);
-    ui.alert("GitHub Actions", `ワークフローを起動しました。\n${result}`, ui.ButtonSet.OK);
+    ui.alert("GitHub Actions を起動しました。");
   } catch (err) {
     ui.alert(
       "GitHub Actions エラー",
@@ -298,35 +298,77 @@ function listJobs_(params) {
     return { ok: true, jobs: [] };
 
   const headers = values[0].map(h => String(h).trim());
+  
+  // デバッグ: ヘッダー列を表示
+  console.log('Spreadsheet Headers:', JSON.stringify(headers));
 
-  const getCol = (name) => {
-    const i = headers.indexOf(name);
-    if (i < 0)
-      throw apiError_("config_error", `列 ${name} 不存在`);
-    return i;
+  const findColumn = (primary, ...fallbacks) => {
+    let i = headers.indexOf(primary);
+    if (i >= 0) return i;
+    for (const fb of fallbacks) {
+      i = headers.indexOf(fb);
+      if (i >= 0) return i;
+    }
+    return -1;
   };
 
-  const titleCol        = getCol("title");
-  const deadlineCol     = getCol("deadline");
-  const maxCol          = getCol("max_applicants");
-  const emailCol        = getCol("client_email");
-  const formCol         = getCol("form_url");
-  const categoryCol     = getCol("category");
-  const countCol        = getCol("applicant_count");
-  const notifiedCol     = getCol("deadline_notified_at");
-  const applicantsCol   = headers.indexOf("applicants");
-  const applicantUrlCol = headers.indexOf("applicant_url");
+  const titleCol        = findColumn("案件名", "title");
+  const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
+  const durationCol     = findColumn("拘束時間", "duration");
+  const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
+  const dateCol         = findColumn("実施日時", "date");
+  const locationCol     = findColumn("実施場所", "location");
+  const requirementsCol = findColumn("応募条件", "requirements");
+  const maxCol          = findColumn("募集人数", "max_applicants");
+  const descriptionCol  = findColumn("案件説明", "description");
+  const conceptCol      = findColumn("コンセプト", "concept");
+  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "makeup");
+  const belongingsCol   = findColumn("持ち物", "belongings");
+  const mediaCol        = findColumn("媒体", "media");
+  const periodCol       = findColumn("使用期間", "period");
+  const competitionCol  = findColumn("競合", "competition");
+  const remainingCol    = findColumn("残り日数", "deadline");
+  const selectionCol    = findColumn("選考方法", "selection_method");
+  const deadlineCol     = remainingCol;  // 互換性のため
+  const emailCol        = findColumn("client_email");
+  const formCol         = findColumn("form_url");
+  const categoryCol     = findColumn("category");
+  const countCol        = findColumn("applicant_count");
+  const notifiedCol     = findColumn("deadline_notified_at");
+  const applicantsCol   = findColumn("applicants");
+  const applicantUrlCol = findColumn("applicant_url");
+
+  // デバッグ: 見つかった列インデックスを表示
+  console.log(`titleCol: ${titleCol}, deadlineCol: ${deadlineCol}, maxCol: ${maxCol}`);
+
+  if (titleCol < 0)
+    throw apiError_("config_error", "案件名列が見つかりません");
 
   const jobs = values.slice(1).map((row, i) => ({
     id:                   "job_" + (i + 2),
     title:                row[titleCol],
-    deadline:             row[deadlineCol],
-    max_applicants:       row[maxCol],
-    client_email:         row[emailCol],
-    form_url:             row[formCol],
-    category:             row[categoryCol],
-    applicant_count:      row[countCol],
-    deadline_notified_at: row[notifiedCol],
+    reward:               row[rewardCol] >= 0 ? row[rewardCol] : "",
+    duration:             row[durationCol] >= 0 ? row[durationCol] : "",
+    hourly_wage:          row[hourlyWageCol] >= 0 ? row[hourlyWageCol] : "",
+    date:                 row[dateCol] >= 0 ? row[dateCol] : "",
+    location:             row[locationCol] >= 0 ? row[locationCol] : "",
+    requirements:         row[requirementsCol] >= 0 ? row[requirementsCol] : "",
+    max_applicants:       row[maxCol] >= 0 ? row[maxCol] : "",
+    description:          row[descriptionCol] >= 0 ? row[descriptionCol] : "",
+    concept:              row[conceptCol] >= 0 ? row[conceptCol] : "",
+    makeup:               row[makeupCol] >= 0 ? row[makeupCol] : "",
+    belongings:           row[belongingsCol] >= 0 ? row[belongingsCol] : "",
+    media:                row[mediaCol] >= 0 ? row[mediaCol] : "",
+    period:               row[periodCol] >= 0 ? row[periodCol] : "",
+    competition:          row[competitionCol] >= 0 ? row[competitionCol] : "",
+    remaining:            row[remainingCol] >= 0 ? row[remainingCol] : "",
+    selection_method:     row[selectionCol] >= 0 ? row[selectionCol] : "",
+    deadline:             row[deadlineCol] >= 0 ? row[deadlineCol] : "",
+    client_email:         row[emailCol] >= 0 ? row[emailCol] : "",
+    form_url:             row[formCol] >= 0 ? row[formCol] : "",
+    category:             row[categoryCol] >= 0 ? row[categoryCol] : "",
+    applicant_count:      row[countCol] >= 0 ? row[countCol] : 0,
+    deadline_notified_at: row[notifiedCol] >= 0 ? row[notifiedCol] : "",
     applicants:           applicantsCol >= 0 ? row[applicantsCol] : "",
     applicant_url:        applicantUrlCol >= 0 ? row[applicantUrlCol] : ""
   }));
@@ -342,9 +384,13 @@ function apply_(params) {
   const tokenPayload = verifyToken_(params.token);
   const jobId        = String(params.jobId        || "").trim();
   const contactEmail = String(params.contactEmail || "").trim();
+  const acceptedCancelPolicy = String(params.acceptedCancelPolicy || "").trim().toLowerCase() === "true";
 
   if (!jobId)
     throw apiError_("invalid_param", "jobId 必須");
+
+  if (!acceptedCancelPolicy)
+    throw apiError_("consent_required", "キャンセルポリシーの確認が必要です");
 
   if (!contactEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))
     throw apiError_("invalid_email", "メールアドレスが不正です");
@@ -359,13 +405,25 @@ function apply_(params) {
   const values  = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
 
-  const titleCol          = headers.indexOf("title");
-  const deadlineCol       = headers.indexOf("deadline");
-  const maxCol            = headers.indexOf("max_applicants");
-  const countCol          = headers.indexOf("applicant_count");
-  const applicantsCol     = headers.indexOf("applicants");
-  const applicantUrlCol   = headers.indexOf("applicant_url");
+  const findColumn = (primary, ...fallbacks) => {
+    let i = headers.indexOf(primary);
+    if (i >= 0) return i;
+    for (const fb of fallbacks) {
+      i = headers.indexOf(fb);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
 
+  const titleCol          = findColumn("案件名", "title");
+  const deadlineCol       = findColumn("残り日数", "deadline");
+  const maxCol            = findColumn("募集人数", "max_applicants");
+  const countCol          = findColumn("applicant_count");
+  const applicantsCol     = findColumn("applicants");
+  const applicantUrlCol   = findColumn("applicant_url");
+
+  if (titleCol < 0)
+    throw apiError_("config_error", "案件名列が見つかりません");
   if (applicantsCol < 0)
     throw apiError_("config_error", "applicants 列不存在");
 
@@ -425,9 +483,15 @@ function apply_(params) {
 ========================================= */
 
 function sendConfirmationEmail_(to, name, jobTitle, deadline) {
-  const deadlineStr = deadline
-    ? Utilities.formatDate(new Date(deadline), "Asia/Tokyo", "yyyy年MM月dd日")
-    : "未定";
+  let deadlineStr = "未定";
+  if (deadline) {
+    const d = new Date(deadline);
+    if (!isNaN(d.getTime())) {
+      deadlineStr = Utilities.formatDate(d, "Asia/Tokyo", "yyyy年MM月dd日");
+    } else {
+      deadlineStr = String(deadline);
+    }
+  }
 
   const subject = `【応募確認】${jobTitle}`;
   const body    = `${name} 様\n\n「${jobTitle}」へのご応募を受け付けました。\n\n締切：${deadlineStr}\n\nご不明な点はご連絡ください。`;
@@ -449,12 +513,26 @@ function notifyDeadlinePassed() {
   const values  = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
 
-  const titleCol          = headers.indexOf("title");
-  const deadlineCol       = headers.indexOf("deadline");
-  const emailCol          = headers.indexOf("client_email");
-  const applicantsCol     = headers.indexOf("applicants");
-  const applicantUrlCol   = headers.indexOf("applicant_url");
-  const notifiedCol       = headers.indexOf("deadline_notified_at");
+  const findColumn = (primary, ...fallbacks) => {
+    let i = headers.indexOf(primary);
+    if (i >= 0) return i;
+    for (const fb of fallbacks) {
+      i = headers.indexOf(fb);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  const titleCol          = findColumn("案件名", "title");
+  const deadlineCol       = findColumn("残り日数", "deadline");
+  const emailCol          = findColumn("client_email");
+  const applicantsCol     = findColumn("applicants");
+  const applicantUrlCol   = findColumn("applicant_url");
+  const notifiedCol       = findColumn("deadline_notified_at");
+
+  if (titleCol < 0 || deadlineCol < 0 || emailCol < 0 || applicantsCol < 0 || notifiedCol < 0) {
+    return;
+  }
 
   const now = new Date();
 
@@ -469,6 +547,7 @@ function notifyDeadlinePassed() {
     if (!clientEmail) return;
 
     const deadlineDate = new Date(deadline);
+    if (isNaN(deadlineDate.getTime())) return;
 
     const nextDay = new Date(deadlineDate);
     nextDay.setDate(nextDay.getDate() + 1);

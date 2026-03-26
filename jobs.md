@@ -17,17 +17,10 @@ page_id: jobs
 
   <div class="filters" id="filters">
     <label class="keyword-filter">
-      キーワード
       <div class="keyword-row">
-        <input type="search" id="search-input" placeholder="" />
+        <input type="search" id="search-input" placeholder="キーワード" aria-label="キーワード" />
         <button id="search-button" type="button">検索</button>
       </div>
-    </label>
-    <label>
-      カテゴリ
-      <select id="category-filter">
-        <option value="">すべて</option>
-      </select>
     </label>
     <div class="wage-filter">
       <label for="wage-range-filter">時給</label>

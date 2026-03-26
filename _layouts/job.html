@@ -22,26 +22,30 @@
     </section>
 
     <!-- メタセクション（ヘッダー） -->
-    <!-- 対応: title, category, deadline -->
+    <!-- 対応: title -->
     <section class="job-hero">
       <h1 id="job-title">{{ page.title }}</h1>
-      <div class="job-meta">
-        <span>カテゴリー: <span id="job-category">未記載</span></span>
-        <span>残り: <span id="job-remaining-days">未定</span></span>
-      </div>
     </section>
 
     <!-- 詳細セクション -->
-    <!-- 対応: title, category, deadline, hourly_wage, fee, max_applicants, applicant_count -->
     <section class="job-content">
       <div class="job-detail-list">
-        <div class="job-detail-item"><span class="job-detail-label">案件名:</span> <span id="job-title-detail">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">カテゴリ:</span> <span id="job-category-detail">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">残り:</span> <span id="job-remaining-days-detail">未定</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">時給:</span> <span id="job-hourly-wage">未設定</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">ギャラ:</span> <span id="job-fee">未記載</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">募集人数:</span> <span id="job-max-applicants">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">現在申し込まれている人数:</span> <span id="job-applicant-count">-</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">報酬</span><span id="job-total-reward">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">実施日時</span><span id="job-implementation-date">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">未記載</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">残り日数</span><span id="job-remaining-days">未定</span></div>
+        <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">未記載</span></div>
       </div>
 
       <div class="job-apply">
@@ -49,11 +53,36 @@
         <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
       </div>
     </section>
+
+    <div id="apply-confirm-modal" class="apply-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="apply-confirm-title">
+      <div class="apply-confirm-modal__backdrop" data-close-modal="true"></div>
+      <div class="apply-confirm-modal__panel">
+        <h2 id="apply-confirm-title">応募内容の最終確認</h2>
+        <p class="apply-confirm-modal__text">応募確定前に以下を確認してください。</p>
+        <div class="apply-confirm-modal__pdf-frame">
+          <iframe src="{{ '/assets/docs/cancel-policy.pdf' | relative_url }}" title="キャンセルポリシーPDFプレビュー" aria-label="キャンセルポリシーPDFプレビュー" scrolling="no"></iframe>
+        </div>
+        <div class="job-consents">
+          <label class="job-consent">
+            <input type="checkbox" id="modal-consent-cancel-policy">
+            <span>キャンセルポリシー（PDFプレビュー）を確認しました</span>
+          </label>
+        </div>
+        <div class="apply-confirm-modal__actions">
+          <button type="button" id="cancel-apply-confirm" class="details-button">戻る</button>
+          <button type="button" id="confirm-apply-button" class="apply-button">応募確定に進む</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const button = document.getElementById("apply-button");
+      const modal = document.getElementById("apply-confirm-modal");
+      const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
+      const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
+      const confirmApplyButton = document.getElementById("confirm-apply-button");
       if (!button) return;
 
       const jobId = button.dataset.jobId;
@@ -90,11 +119,26 @@
         if (code === "invalid_credentials") return "名前またはパスワードが正しくありません。";
         if (code === "invalid_token" || code === "token_expired") return "セッションが無効です。再ログインしてください。";
         if (code === "already_applied") return "この案件には既に応募済みです。";
+        if (code === "consent_required") return "キャンセルポリシーの確認が必要です。";
         if (code === "quota_full") return "応募人数が上限に達しています。";
         if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
         if (code === "forbidden") return "この操作を実行する権限がありません。";
         if (code === "invalid_email") return "確認メール送信先のメールアドレスが不正です。";
         return String(response?.message || "処理に失敗しました。");
+      }
+
+      function hasRequiredConsents() {
+        return Boolean(modalCancelPolicyCheckbox?.checked);
+      }
+
+      function openConfirmModal() {
+        if (!modal) return;
+        modal.classList.remove("hidden");
+      }
+
+      function closeConfirmModal() {
+        if (!modal) return;
+        modal.classList.add("hidden");
       }
 
       function setText(id, value) {
@@ -111,6 +155,21 @@
         }
       }
 
+      function pickFirst(...values) {
+        for (const value of values) {
+          const text = value === undefined || value === null ? "" : String(value).trim();
+          if (text) return text;
+        }
+        return "";
+      }
+
+      function setTextOrFallback(id, value, fallback) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const text = value === undefined || value === null ? "" : String(value).trim();
+        el.textContent = text || fallback;
+      }
+
       function calculateRemainingDays(deadline) {
         if (!deadline) return "未定";
         const today = new Date();
@@ -123,11 +182,85 @@
       }
 
       function renderJob(job) {
-        const category = job.category || (Array.isArray(job.tags) ? job.tags.join(", ") : job.tags) || "";
-        const maxApplicants = job.max_applicants ?? job.maxApplicants ?? "";
-        const applicantCount = job.applicant_count ?? job.applicantCount ?? "";
-        const hourlyWageRaw = Number(job.hourly_wage ?? job.hourlyWage);
-        const hourlyWage = Number.isFinite(hourlyWageRaw) ? `¥${hourlyWageRaw.toLocaleString()}` : "未設定";
+        // 報酬総額
+        const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job["報酬"]);
+        const totalRewardNumber = Number(totalRewardValue);
+        const totalReward = Number.isFinite(totalRewardNumber)
+          ? `${totalRewardNumber.toLocaleString()}円（交通費込）`
+          : (totalRewardValue || "未記載");
+        
+        // 拘束時間（分離）
+        const duration = pickFirst(job.duration, job["拘束時間"], job["拘束時間(時間)"]);
+        
+        // 時給（分離）
+        const hourlyWageValue = pickFirst(job.hourly_wage, job.hourlyWage, job.wage, job["時給"]);
+        const hourlyWageNumber = Number(hourlyWageValue);
+        const hourlyWage = Number.isFinite(hourlyWageNumber) ? `${hourlyWageNumber.toLocaleString()}円/時` : hourlyWageValue;
+        
+        // 実施日時
+        const implementationDate = pickFirst(
+          job.implementation_date,
+          job.execution_date,
+          job.date,
+          job.schedule,
+          job["実施日時"],
+          job["日時"]
+        );
+        
+        // 実施場所
+        const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);
+        
+        // 応募条件
+        const requirements = pickFirst(
+          job.requirements,
+          job.qualifications,
+          job.conditions,
+          job["応募条件"],
+          job["条件"]
+        );
+        
+        // 募集人数
+        const recruitmentNumber = pickFirst(
+          job.recruitment_number,
+          job.number_of_applicants,
+          job.max_applicants,
+          job["募集人数"],
+          job["人数"]
+        );
+        
+        // 案件説明
+        const description = pickFirst(job.description, job.details, job.shooting_content, job["案件説明"]);
+        
+        // コンセプト
+        const concept = pickFirst(job.concept, job.concept_line, job["コンセプト"]);
+        
+        // メイク・ヘアメイク
+        const makeupSupport = pickFirst(
+          job.makeup_staff,
+          job.hair_makeup_staff,
+          job.make_hair_makeup,
+          job["メイク・ヘアメイクスタッフの有無"]
+        );
+        
+        // 持ち物
+        const belongings = pickFirst(job.belongings, job["持ち物"]);
+        
+        // 媒体
+        const media = pickFirst(job.media, job.medium, job["媒体"]);
+        
+        // 使用期間
+        const usagePeriod = pickFirst(job.usage_period, job.period, job["使用期間"]);
+        
+        // 競合
+        const competition = pickFirst(job.competition, job.conflict, job["競合"]);
+        
+        // 残り日数
+        const remainingDays = calculateRemainingDays(job.deadline);
+        
+        // 選考方法
+        const selectionMethod = pickFirst(job.selection_method, job.selection_process, job.method, job["選考方法"]);
+        
+        // サムネイル
         const thumbnailRaw =
           job.thumbnail_url ||
           job.eyecatch_image ||
@@ -141,18 +274,24 @@
 
         // メタセクション表示
         setText("job-title", job.title);
-        setText("job-category", category);
-        setText("job-max-applicants", maxApplicants);
-        setText("job-applicant-count", applicantCount);
-        const remainingDays = calculateRemainingDays(job.deadline);
-        setText("job-remaining-days", remainingDays);
 
         // 詳細セクション表示
-        setText("job-title-detail", job.title);
-        setText("job-category-detail", category);
-        setText("job-remaining-days-detail", remainingDays);
-        setText("job-hourly-wage", hourlyWage);
-        setText("job-fee", job.fee);
+        setTextOrFallback("job-total-reward", totalReward, "未記載");
+        setTextOrFallback("job-duration", duration, "未記載");
+        setTextOrFallback("job-hourly-wage", hourlyWage, "未記載");
+        setTextOrFallback("job-implementation-date", implementationDate, "未記載");
+        setTextOrFallback("job-location", location, "未記載");
+        setTextOrFallback("job-requirements", requirements, "未記載");
+        setTextOrFallback("job-recruitment-number", recruitmentNumber, "未記載");
+        setTextOrFallback("job-description", description, "未記載");
+        setTextOrFallback("job-concept", concept, "未記載");
+        setTextOrFallback("job-makeup-support", makeupSupport, "未記載");
+        setTextOrFallback("job-belongings", belongings, "未記載");
+        setTextOrFallback("job-media", media, "未記載");
+        setTextOrFallback("job-usage-period", usagePeriod, "未記載");
+        setTextOrFallback("job-competition", competition, "未記載");
+        setText("job-remaining-days", remainingDays);
+        setTextOrFallback("job-selection-method", selectionMethod, "未記載");
 
         if (thumbnailEl) {
           if (thumbnail) {
@@ -193,33 +332,51 @@
 
       loadJobDetail();
 
-      button.addEventListener("click", async () => {
+      modal?.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
+          closeConfirmModal();
+        }
+      });
+      cancelConfirmButton?.addEventListener("click", closeConfirmModal);
+
+      button.addEventListener("click", () => {
+        openConfirmModal();
+      });
+
+      confirmApplyButton?.addEventListener("click", async () => {
         const session = loadSession();
         if (!session) { alert("セッションが無効です。ログインしてください。"); return; }
+        if (!hasRequiredConsents()) { alert("キャンセルポリシーの確認が必要です。"); return; }
 
         const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
         if (!contactEmail || !contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
 
-        button.disabled = true;
+        confirmApplyButton.disabled = true;
 
         try {
           const data = await jsonpRequest(
-            { action: "apply", token: session.token, jobId, contactEmail: contactEmail.trim() },
+            {
+              action: "apply",
+              token: session.token,
+              jobId,
+              contactEmail: contactEmail.trim(),
+              acceptedCancelPolicy: "true"
+            },
             apiTimeoutMs
           );
 
           if (!data.ok) {
             alert(readableApiError(data));
-            button.disabled = false;
+            confirmApplyButton.disabled = false;
             return;
           }
 
           alert("応募が完了しました。確認メールをご確認ください。");
-          const countEl = document.getElementById("job-applicant-count");
-          if (countEl && data.applicantCount !== undefined && data.applicantCount !== null) {
-            countEl.textContent = String(data.applicantCount);
-          }
+          closeConfirmModal();
+          modalCancelPolicyCheckbox.checked = false;
+          confirmApplyButton.disabled = false;
 
           // 最新の案件情報を再取得して応募者リストを更新
           await loadJobDetail();
@@ -227,7 +384,7 @@
         } catch (err) {
           console.error(err);
           alert("通信エラーが発生しました。時間をおいて再度お試しください。");
-          button.disabled = false;
+          confirmApplyButton.disabled = false;
         }
       });
     });

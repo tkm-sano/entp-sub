@@ -42,30 +42,40 @@ async function fetchSheet() {
 
     const [headers, ...dataRows] = rows;
     
-    // Code.gs の listJobs_ で必要なカラムが存在するか確認
-    const requiredColumns = ['title', 'deadline', 'max_applicants', 'client_email', 
-                             'form_url', 'category', 'applicant_count', 'deadline_notified_at'];
-    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+    // 日本語と英語の列名の両方に対応
+    const requiredColumns = [
+      { en: 'title', jp: '案件名' },
+      { en: 'deadline', jp: '残り日数' },
+      { en: 'max_applicants', jp: '募集人数' },
+    ];
     
-    if (missingColumns.length > 0) {
-      console.warn(`Warning: 以下のカラムが見つかりません: ${missingColumns.join(', ')}`);
+    // 列名の正規化処理
+    const normalizedHeaders = headers.map(h => String(h).trim());
+    const headerMap = {};
+    
+    for (const col of requiredColumns) {
+      const found = normalizedHeaders.find(h => h === col.en || h === col.jp);
+      if (!found) {
+        console.warn(`Warning: "${col.en}" または "${col.jp}" カラムが見つかりません`);
+      } else {
+        headerMap[col.en] = found;
+      }
     }
 
-    console.log(`検出されたカラム: ${headers.join(', ')}`);
+    console.log(`検出されたカラム: ${normalizedHeaders.join(', ')}`);
 
-    // 各行をオブジェクトに変換（Code.gs と同じロジック）
+    // 各行をオブジェクトに変換（実際の列名のまま保存）
     const jobs = dataRows
       .map((row, index) => {
         const job = {};
-        headers.forEach((h, i) => {
-          const header = String(h || '').trim();
-          job[header] = row[i] || '';
+        normalizedHeaders.forEach((h, i) => {
+          job[h] = row[i] || '';
         });
         
-        // titleが空の行はスキップ（Code.gs の readUsers_ と同様）
-        const title = String(job.title || '').trim();
+        // titleまたは案件名が空の行はスキップ
+        const title = String(job['title'] || job['案件名'] || '').trim();
         if (!title) {
-          console.log(`行 ${index + 2} をスキップ: title が空です`);
+          console.log(`行 ${index + 2} をスキップ: 案件名が空です`);
           return null;
         }
         

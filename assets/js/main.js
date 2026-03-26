@@ -28,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
     message: document.getElementById("jobs-message"),
     searchInput: document.getElementById("search-input"),
     searchButton: document.getElementById("search-button"),
-    categoryFilter: document.getElementById("category-filter"),
     wageRangeFilter: document.getElementById("wage-range-filter")
   };
 
@@ -68,7 +67,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function bindJobsEvents() {
     jobEls.logoutButton?.addEventListener("click", onLogout);
     jobEls.searchButton?.addEventListener("click", resetToFirstPage);
-    jobEls.categoryFilter?.addEventListener("change", resetToFirstPage);
     jobEls.wageRangeFilter?.addEventListener("change", resetToFirstPage);
     jobEls.nextButton?.addEventListener("click", onNextPage);
   }
@@ -161,7 +159,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       state.jobs = data.jobs || [];
       setJobsMessage("", false);
-      populateCategoryOptions();
       renderJobs();
 
     } catch (err) {
@@ -187,13 +184,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!jobEls.jobsList) return;
 
     const keyword  = (state.appliedKeyword || "").trim().toLowerCase();
-    const category = jobEls.categoryFilter?.value || "";
     const wageRange = jobEls.wageRangeFilter?.value || "";
 
     const filtered = state.jobs.filter(job => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
-      const jobCategory = job.category || (Array.isArray(job.tags) ? job.tags[0] : job.tags) || "";
-      if (category && jobCategory !== category) return false;
 
       if (job.deadline) {
         const deadlineDate = new Date(job.deadline);
@@ -284,24 +278,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const hasNext = state.page < totalPages;
       jobEls.pagination.classList.toggle("hidden", !hasNext);
       if (jobEls.nextButton) jobEls.nextButton.disabled = !hasNext;
-    }
-  }
-
-  function populateCategoryOptions() {
-    if (!jobEls.categoryFilter) return;
-    const current = jobEls.categoryFilter.value || "";
-    const categories = Array.from(new Set(
-      state.jobs
-        .map(job => job.category || (Array.isArray(job.tags) ? job.tags[0] : job.tags) || "")
-        .map(value => String(value).trim())
-        .filter(Boolean)
-    )).sort((a, b) => a.localeCompare(b, "ja"));
-
-    jobEls.categoryFilter.innerHTML = '<option value="">すべて</option>' +
-      categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
-
-    if (current && categories.includes(current)) {
-      jobEls.categoryFilter.value = current;
     }
   }
 
