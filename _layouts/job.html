@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page.title }} | 案件詳細</title>
+  <title>案件詳細</title>
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
   <script src="{{ '/assets/js/env.js' | relative_url }}"></script>
   <script>
@@ -24,7 +24,7 @@
     <!-- メタセクション（ヘッダー） -->
     <!-- 対応: title -->
     <section class="job-hero">
-      <h1 id="job-title">{{ page.title }}</h1>
+      <h1 id="job-title">案件詳細を読み込み中...</h1>
     </section>
 
     <!-- 詳細セクション -->
@@ -60,7 +60,7 @@
         <h2 id="apply-confirm-title">応募内容の最終確認</h2>
         <p class="apply-confirm-modal__text">応募確定前に以下を確認してください。</p>
         <div class="apply-confirm-modal__pdf-frame">
-          <iframe src="{{ '/assets/docs/cancel-policy.pdf' | relative_url }}" title="キャンセルポリシーPDFプレビュー" aria-label="キャンセルポリシーPDFプレビュー" scrolling="no"></iframe>
+          <iframe src="{{ '/assets/docs/cancel-policy.pdf' | relative_url }}" title="キャンセルポリシーPDFプレビュー" aria-label="キャンセルポリシーPDFプレビュー"></iframe>
         </div>
         <div class="job-consents">
           <label class="job-consent">
@@ -300,7 +300,9 @@
         const thumbnailEl = document.getElementById("job-thumbnail");
 
         // メタセクション表示
-        setText("job-title", job.title);
+        const resolvedTitle = pickFirst(job.title, job.name, job.job_title, "案件詳細");
+        setText("job-title", resolvedTitle);
+        document.title = `${resolvedTitle} | 案件詳細`;
 
         // 詳細セクション表示
         setTextOrFallback("job-total-reward", totalReward, "-");
