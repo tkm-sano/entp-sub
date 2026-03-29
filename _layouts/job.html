@@ -339,14 +339,30 @@
         if (!jobId) { alert("案件IDが見つかりません。"); return; }
 
         try {
-          const data = await jsonpRequest({ action: "listJobs", token: session.token }, apiTimeoutMs);
-          if (!data.ok) {
-            alert(readableApiError(data));
+          let job = null;
+
+          // 優先: 単一案件APIで転送量を削減して表示を高速化
+          const singleData = await jsonpRequest(
+            { action: "getJob", token: session.token, jobId },
+            apiTimeoutMs
+          );
+
+          if (singleData?.ok && singleData.job) {
+            job = singleData.job;
+          } else if (String(singleData?.errorCode || "") === "invalid_action") {
+            // API未反映時の互換フォールバック
+            const listData = await jsonpRequest({ action: "listJobs", token: session.token }, apiTimeoutMs);
+            if (!listData.ok) {
+              alert(readableApiError(listData));
+              return;
+            }
+            const jobs = Array.isArray(listData.jobs) ? listData.jobs : [];
+            job = jobs.find((item) => String(item.job_id || item.id || "") === String(jobId)) || null;
+          } else {
+            alert(readableApiError(singleData));
             return;
           }
 
-          const jobs = Array.isArray(data.jobs) ? data.jobs : [];
-          const job = jobs.find((item) => String(item.job_id || item.id || "") === String(jobId));
           if (!job) {
             alert("案件が見つかりませんでした。");
             return;

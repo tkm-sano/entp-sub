@@ -8,9 +8,13 @@ const SHEET_NAMES = {
   jobs: "jobs"
 };
 
-const API_BUILD = "2026-03-26-2";
+const API_BUILD = "2026-03-29-1";
 const GITHUB_API_BASE = "https://api.github.com";
 const TZ = "Asia/Tokyo";
+const TALENT_USERS_CACHE_KEY = "talent_users_v2";
+const DEFAULT_TALENT_USERS_CACHE_SECONDS = 300;
+const DEFAULT_RETRY_COUNT = 3;
+const DEFAULT_RETRY_BASE_MS = 250;
 
 /* =========================================
    Spreadsheet Menu
@@ -164,6 +168,8 @@ function doPost(e) {
 
 function handleRequest_(e) {
   let callback = "";
+  const requestId = Utilities.getUuid();
+  const startedAt = Date.now();
 
   try {
     const params = e?.parameter || {};
@@ -182,11 +188,16 @@ function handleRequest_(e) {
       payload = login_(params);
     } else if (action === "listJobs") {
       payload = listJobs_(params);
+    } else if (action === "getJob") {
+      payload = getJob_(params);
     } else if (action === "apply") {
       payload = apply_(params);
     } else {
       throw apiError_("invalid_action", "未対応 action");
     }
+
+    payload.requestId = requestId;
+    payload.elapsedMs = Date.now() - startedAt;
 
     return respond_(callback, payload);
 
@@ -194,7 +205,9 @@ function handleRequest_(e) {
     return respond_(callback, {
       ok: false,
       errorCode: err.code || "internal_error",
-      message: err.message || "内部エラー"
+      message: err.message || "内部エラー",
+      requestId,
+      elapsedMs: Date.now() - startedAt
     });
   }
 }
@@ -204,7 +217,7 @@ function handleRequest_(e) {
 ========================================= */
 
 function login_(params) {
-  const name = String(params.name || "").trim();
+  const name = normalizeName_(params.name);
   const password = String(params.password || "").trim();
 
   if (!name || !password) {
@@ -216,7 +229,7 @@ function login_(params) {
   }
 
   const users = readUsers_();
-  const user = users.find(u => u.name === name);
+  const user = users.find(u => u.normalizedName === name);
 
   if (!user) {
     throw apiError_("invalid_credentials", "ユーザー不存在");
@@ -250,52 +263,95 @@ function login_(params) {
 ========================================= */
 
 function readUsers_() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = getTalentUsersCacheKey_();
+  const cached = cache.get(cacheKey);
+
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (err) {
+      // キャッシュ破損時は読み直す
+    }
+  }
+
+  const users = runWithRetry_(function() {
+    const sheet = getTalentSheet_();
+    const values = sheet.getDataRange().getValues();
+
+    if (values.length < 2) {
+      return [];
+    }
+
+    const headers = values[0].map(h => String(h).trim());
+
+    const nameCol = findColumn_(headers, "名前");
+    const emailCol = findColumn_(
+      headers,
+      "email",
+      "メールアドレス",
+      "E-mail",
+      "Email",
+      "mail"
+    );
+    const pageUrlCol = findColumn_(headers, "個別ページURL", "page_url", "profile_url");
+
+    if (nameCol < 0) {
+      throw apiError_("config_error", "名前列不存在");
+    }
+
+    return values.slice(1).map(row => {
+      const rawName = String(row[nameCol] || "");
+      const normalizedName = normalizeName_(rawName);
+
+      if (!normalizedName) {
+        return null;
+      }
+
+      return {
+        uid: hash_(normalizedName),
+        name: rawName.trim(),
+        normalizedName,
+        email: emailCol >= 0 ? String(row[emailCol] || "").trim() : "",
+        pageUrl: pageUrlCol >= 0 ? String(row[pageUrlCol] || "").trim() : ""
+      };
+    }).filter(Boolean);
+  }, DEFAULT_RETRY_COUNT, DEFAULT_RETRY_BASE_MS);
+
+  try {
+    cache.put(cacheKey, JSON.stringify(users), getTalentUsersCacheSeconds_());
+  } catch (err) {
+    // キャッシュ保存失敗でも処理は継続
+  }
+
+  return users;
+}
+
+function getTalentSheet_() {
   const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
   const sheetName = getOptionalProperty_("TALENT_SHEET_NAME");
-
   const ss = SpreadsheetApp.openById(id);
-  const sheet = sheetName ? ss.getSheetByName(sheetName) : findSheetWithHeader_(ss, "名前");
 
+  if (sheetName) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      throw apiError_("config_error", `名簿シート不存在: ${sheetName}`);
+    }
+    return sheet;
+  }
+
+  const sheet = findSheetWithHeader_(ss, "名前");
   if (!sheet) {
     throw apiError_("config_error", "名簿シート不存在");
   }
+  return sheet;
+}
 
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) {
-    return [];
-  }
-
-  const headers = values[0].map(h => String(h).trim());
-
-  const nameCol = findColumn_(headers, "名前");
-  const emailCol = findColumn_(
-    headers,
-    "email",
-    "メールアドレス",
-    "E-mail",
-    "Email",
-    "mail",
-    "instagram_url"
-  );
-  const pageUrlCol = findColumn_(headers, "個別ページURL", "page_url", "profile_url");
-
-  if (nameCol < 0) {
-    throw apiError_("config_error", "名前列不存在");
-  }
-
-  return values.slice(1).map(row => {
-    const name = String(row[nameCol] || "").trim();
-    if (!name) {
-      return null;
-    }
-
-    return {
-      uid: hash_(name),
-      name,
-      email: emailCol >= 0 ? String(row[emailCol] || "").trim() : "",
-      pageUrl: pageUrlCol >= 0 ? String(row[pageUrlCol] || "").trim() : ""
-    };
-  }).filter(Boolean);
+function clearTalentUsersCache_() {
+  CacheService.getScriptCache().remove(getTalentUsersCacheKey_());
 }
 
 /* =========================================
@@ -349,44 +405,105 @@ function listJobs_(params) {
 
   const jobs = values.slice(1).map((row, i) => {
     const displayRow = displayValues[i + 1] || [];
-    const generatedId = getJobIdFromRow_(row, displayRow, headers, i + 2);
-
-    const deadlineText = colDisplay_(displayRow, deadlineCol, "");
-    const remainingText = colDisplay_(displayRow, remainingCol, "");
-    const computedRemaining = calculateRemainingDaysLabel_(colValue_(row, deadlineCol, ""));
-    const remaining = computedRemaining || remainingText;
-
-    return {
-      id: generatedId,
-      job_id: generatedId,
-      title: colDisplay_(displayRow, titleCol, ""),
-      reward: colDisplay_(displayRow, rewardCol, ""),
-      duration: colDisplay_(displayRow, durationCol, ""),
-      hourly_wage: colDisplay_(displayRow, hourlyWageCol, ""),
-      date: colDisplay_(displayRow, dateCol, ""),
-      location: colDisplay_(displayRow, locationCol, ""),
-      requirements: colDisplay_(displayRow, requirementsCol, ""),
-      max_applicants: colDisplay_(displayRow, maxCol, ""),
-      description: colDisplay_(displayRow, descriptionCol, ""),
-      concept: colDisplay_(displayRow, conceptCol, ""),
-      makeup: colDisplay_(displayRow, makeupCol, ""),
-      belongings: colDisplay_(displayRow, belongingsCol, ""),
-      media: colDisplay_(displayRow, mediaCol, ""),
-      period: colDisplay_(displayRow, periodCol, ""),
-      competition: colDisplay_(displayRow, competitionCol, ""),
-      remaining: remaining,
-      selection_method: colDisplay_(displayRow, selectionCol, ""),
-      deadline: deadlineText,
-      client_email: colDisplay_(displayRow, emailCol, ""),
-      form_url: colDisplay_(displayRow, formCol, ""),
-      category: colDisplay_(displayRow, categoryCol, ""),
-      applicant_count: colValue_(row, countCol, 0),
-      deadline_notified_at: colDisplay_(displayRow, notifiedCol, ""),
-      applicants: colDisplay_(displayRow, applicantsCol, "")
-    };
+    return buildJobFromRow_(row, displayRow, headers, i + 2);
   });
 
   return { ok: true, jobs };
+}
+
+function getJob_(params) {
+  verifyToken_(params.token);
+
+  const jobId = String(params.jobId || "").trim();
+  if (!jobId) {
+    throw apiError_("invalid_param", "jobId 必須");
+  }
+
+  const sheet = getJobsSheet_();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
+
+  if (values.length < 2) {
+    throw apiError_("not_found", "案件が見つかりません");
+  }
+
+  const headers = values[0].map(h => String(h).trim());
+  const rowIndex = findJobRowIndex_(values, headers, jobId);
+
+  if (rowIndex < 1) {
+    throw apiError_("not_found", "案件が見つかりません");
+  }
+
+  const row = values[rowIndex];
+  const displayRow = displayValues[rowIndex] || [];
+  const job = buildJobFromRow_(row, displayRow, headers, rowIndex + 1);
+
+  return { ok: true, job };
+}
+
+function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
+  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
+
+  const titleCol        = findColumn("案件名", "title", "案件タイトル");
+  const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
+  const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
+  const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
+  const dateCol         = findColumn("実施日時", "date", "candidate_shoot_dates");
+  const locationCol     = findColumn("実施場所", "location", "shoot_location");
+  const requirementsCol = findColumn("応募条件", "requirements");
+  const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
+  const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
+  const conceptCol      = findColumn("コンセプト", "concept");
+  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
+  const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
+  const mediaCol        = findColumn("媒体", "media", "media_usage");
+  const periodCol       = findColumn("使用期間", "period", "usage_period");
+  const competitionCol  = findColumn("競合", "competition", "competition_presence");
+  const remainingCol    = findColumn("残り日数");
+  const selectionCol    = findColumn("選考方法", "selection_method");
+  const deadlineCol     = findColumn("締切日", "deadline", "締切");
+  const emailCol        = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
+  const formCol         = findColumn("form_url");
+  const categoryCol     = findColumn("category");
+  const countCol        = findColumn("applicant_count");
+  const notifiedCol     = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
+  const applicantsCol   = findColumn("applicants", "応募者", "応募者名");
+
+  const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
+  const deadlineText = colDisplay_(displayRow, deadlineCol, "");
+  const remainingText = colDisplay_(displayRow, remainingCol, "");
+  const computedRemaining = calculateRemainingDaysLabel_(colValue_(row, deadlineCol, ""));
+  const remaining = computedRemaining || remainingText;
+
+  return {
+    id: generatedId,
+    job_id: generatedId,
+    title: colDisplay_(displayRow, titleCol, ""),
+    reward: colDisplay_(displayRow, rewardCol, ""),
+    duration: colDisplay_(displayRow, durationCol, ""),
+    hourly_wage: colDisplay_(displayRow, hourlyWageCol, ""),
+    date: colDisplay_(displayRow, dateCol, ""),
+    location: colDisplay_(displayRow, locationCol, ""),
+    requirements: colDisplay_(displayRow, requirementsCol, ""),
+    max_applicants: colDisplay_(displayRow, maxCol, ""),
+    description: colDisplay_(displayRow, descriptionCol, ""),
+    concept: colDisplay_(displayRow, conceptCol, ""),
+    makeup: colDisplay_(displayRow, makeupCol, ""),
+    belongings: colDisplay_(displayRow, belongingsCol, ""),
+    media: colDisplay_(displayRow, mediaCol, ""),
+    period: colDisplay_(displayRow, periodCol, ""),
+    competition: colDisplay_(displayRow, competitionCol, ""),
+    remaining: remaining,
+    selection_method: colDisplay_(displayRow, selectionCol, ""),
+    deadline: deadlineText,
+    client_email: colDisplay_(displayRow, emailCol, ""),
+    form_url: colDisplay_(displayRow, formCol, ""),
+    category: colDisplay_(displayRow, categoryCol, ""),
+    applicant_count: colValue_(row, countCol, 0),
+    deadline_notified_at: colDisplay_(displayRow, notifiedCol, ""),
+    applicants: colDisplay_(displayRow, applicantsCol, "")
+  };
 }
 
 /* =========================================
@@ -665,7 +782,9 @@ function verifyToken_(token) {
 
 function getJobsSheet_() {
   const id = getProperty_("SPREADSHEET_ID");
-  const ss = SpreadsheetApp.openById(id);
+  const ss = runWithRetry_(function() {
+    return SpreadsheetApp.openById(id);
+  }, DEFAULT_RETRY_COUNT, DEFAULT_RETRY_BASE_MS);
   const sheet = ss.getSheetByName(SHEET_NAMES.jobs);
 
   if (!sheet) {
@@ -689,6 +808,21 @@ function getOptionalProperty_(key) {
 
 function getLoginPassword_() {
   return getProperty_("LOGIN_PASSWORD");
+}
+
+function getTalentUsersCacheKey_() {
+  const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
+  const sheetName = getOptionalProperty_("TALENT_SHEET_NAME") || "auto";
+  return `${TALENT_USERS_CACHE_KEY}:${id}:${sheetName}`;
+}
+
+function getTalentUsersCacheSeconds_() {
+  const raw = getOptionalProperty_("TALENT_USERS_CACHE_SECONDS");
+  const parsed = Number(raw);
+  if (!raw || !Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_TALENT_USERS_CACHE_SECONDS;
+  }
+  return Math.min(Math.floor(parsed), 21600);
 }
 
 function findSheetWithHeader_(ss, headerName) {
@@ -853,6 +987,13 @@ function normalizeNumber_(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function normalizeName_(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function sanitizeCallback_(callback) {
   if (!callback) {
     return "";
@@ -887,4 +1028,35 @@ function hash_(text) {
     text
   );
   return raw.map(b => ("0" + (b & 0xFF).toString(16)).slice(-2)).join("");
+}
+
+function runWithRetry_(fn, maxAttempts = DEFAULT_RETRY_COUNT, baseSleepMs = DEFAULT_RETRY_BASE_MS) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt >= maxAttempts || !shouldRetry_(err)) {
+        throw err;
+      }
+      Utilities.sleep(baseSleepMs * attempt);
+    }
+  }
+
+  throw lastError || apiError_("internal_error", "retry_failed");
+}
+
+function shouldRetry_(err) {
+  if (!err) {
+    return false;
+  }
+
+  if (err.code === "config_error" || err.code === "invalid_credentials") {
+    return false;
+  }
+
+  const message = String(err.message || err || "");
+  return /Exception|Service invoked too many times|Timed out|Internal error|Address unavailable|Service error|Spreadsheet/i.test(message);
 }
