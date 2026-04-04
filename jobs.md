@@ -5,10 +5,6 @@ page_id: jobs
 ---
 
 <section id="jobs-panel">
-  <div class="account-row">
-    <button id="logout-button" type="button">ログアウト</button>
-  </div>
-
   <div class="jobs-header">
     <h2>案件一覧</h2>
     <p class="jobs-subtitle">詳細は各案件をクリック！</p>

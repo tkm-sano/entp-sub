@@ -10,17 +10,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiUrl = String(window.MENU_TALENT_API_URL || "").trim();
   const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
   const isConfigured = apiUrl && !apiUrl.startsWith("YOUR_");
-  const sessionKey = "menuTalentSessionV1";
   const pageSize = 10;
 
   const loginEls = {
-    form: document.getElementById("sheet-login-form"),
     message: document.getElementById("login-message")
   };
 
   const jobEls = {
-    accountSummary: document.getElementById("account-summary"),
-    logoutButton: document.getElementById("logout-button"),
     jobsList: document.getElementById("jobs-list"),
     jobsCount: document.getElementById("jobs-count"),
     pagination: document.getElementById("jobs-pagination"),
@@ -31,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wageRangeFilter: document.getElementById("wage-range-filter")
   };
 
-  const state = { session: null, jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
+  const state = { jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
 
   if (!isConfigured) {
     const text = "API設定が未完了です。`assets/js/env.js` の URL を設定してください。";
@@ -48,24 +44,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function initPage() {
     if (pageId === "login") {
-      loginEls.form?.addEventListener("submit", onLoginSubmit);
-      const session = loadSession();
-      if (session) { goTo(routes.jobs); return; }
-      enableForm(loginEls.form);
+      goTo("jobs/");
       return;
     }
 
     if (pageId === "jobs") {
-      state.session = loadSession();
-      if (!state.session) { goTo(routes.login); return; }
-      updateAccountSummary();
       bindJobsEvents();
       refreshJobs();
     }
   }
 
   function bindJobsEvents() {
-    jobEls.logoutButton?.addEventListener("click", onLogout);
     jobEls.searchButton?.addEventListener("click", resetToFirstPage);
     jobEls.wageRangeFilter?.addEventListener("change", resetToFirstPage);
     jobEls.nextButton?.addEventListener("click", onNextPage);
@@ -86,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function goTo(path) {
     if (!path) return;
-    const url = new URL(path, window.location.origin);
+    const url = new URL(path, window.location.href);
     let nextPath = url.pathname.replace(/\/+$/, "");
     let currentPath = window.location.pathname.replace(/\/+$/, "");
     if (currentPath.endsWith("/index.html")) currentPath = currentPath.replace(/\/index\.html$/, "");
@@ -111,46 +100,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  async function onLoginSubmit(e) {
-    e.preventDefault();
-    setLoginMessage("", false);
-    disableForm(loginEls.form);
-
-    const name     = loginEls.form.querySelector('[name="name"]')?.value.trim() || "";
-    const password = loginEls.form.querySelector('[name="password"]')?.value.trim() || "";
-
-    if (!name || !password) {
-      setLoginMessage("名前とパスワードを入力してください。", true);
-      enableForm(loginEls.form);
-      return;
-    }
-
-    try {
-      const data = await jsonpRequest({ action: "login", name, password }, apiTimeoutMs);
-
-      if (!data.ok) {
-        setLoginMessage(readableApiError(data), true);
-        enableForm(loginEls.form);
-        return;
-      }
-
-      saveSession({ token: data.session.token, name: data.session.name, role: data.session.role });
-      goTo(routes.jobs);
-
-    } catch (err) {
-      console.error(err);
-      setLoginMessage("通信エラーが発生しました。時間をおいて再度お試しください。", true);
-      enableForm(loginEls.form);
-    }
-  }
-
-  function onLogout() { clearSession(); goTo(routes.login); }
-
   async function refreshJobs() {
     setJobsMessage("読み込み中...", false);
 
     try {
-      const data = await jsonpRequest({ action: "listJobs", token: state.session.token }, apiTimeoutMs);
+      const data = await jsonpRequest({ action: "listJobs" }, apiTimeoutMs);
 
       if (!data.ok) {
         setJobsMessage(readableApiError(data), true);
@@ -285,16 +239,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function updateAccountSummary() {
-    if (!jobEls.accountSummary || !state.session) return;
-    const { name, role } = state.session;
-    jobEls.accountSummary.textContent = `${escapeHtml(name || "")}（${roleLabel(role)}）`;
-  }
-
-  function saveSession(session) { sessionStorage.setItem(sessionKey, JSON.stringify(session)); }
-  function loadSession() { try { return JSON.parse(sessionStorage.getItem(sessionKey)) || null; } catch { return null; } }
-  function clearSession() { sessionStorage.removeItem(sessionKey); }
-
   function setLoginMessage(text, isError) {
     if (!loginEls.message) return;
     loginEls.message.textContent = text;
@@ -314,13 +258,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-
-  function roleLabel(role) {
-    if (role === "client") return "クライアント";
-    if (role === "admin") return "管理者";
-    return "タレント";
-  }
-
   function readableApiError(data) {
     if (data.error) return data.error;
     if (data.message) return data.message;

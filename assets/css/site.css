@@ -179,7 +179,6 @@ button[disabled] {
 /* ------------------------------
    レイアウトユーティリティ
 ------------------------------ */
-.account-row,
 .jobs-header,
 .job-actions {
   display: flex;
@@ -187,12 +186,6 @@ button[disabled] {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.account-row {
-  justify-content: flex-end;
-  width: 100%;
-  margin-bottom: 0.15rem;
 }
 
 .jobs-header {
@@ -460,7 +453,6 @@ body[data-page="login"] .system-message {
   justify-content: center;
 }
 
-#logout-button,
 .details-button {
   border: 1px solid #000;
   border-radius: 10px;
@@ -476,20 +468,9 @@ body[data-page="login"] .system-message {
   transition: background 0.15s, color 0.15s;
 }
 
-#logout-button {
-  border: none;
-  color: var(--text);
-  text-decoration: underline;
-}
-
-#logout-button:hover:not(:disabled),
 .details-button:hover {
   background: #f2f2f2;
   color: #000000;
-}
-
-#logout-button:hover:not(:disabled) {
-  color: var(--text);
 }
 
 .apply-button {
@@ -587,12 +568,10 @@ body[data-page="login"] .system-message {
 }
 
 @media (max-width: 720px) {
-  .account-row,
   .job-actions {
     align-items: center;
   }
 
-  .account-row button,
   .job-actions button,
   .apply-button {
     width: auto;
@@ -934,7 +913,6 @@ body[data-page="jobs"] .job-card__deadline {
   font-size: 0.9rem;
 }
 
-body[data-page="jobs"] #logout-button,
 body[data-page="jobs"] .details-button,
 body[data-page="jobs"] .apply-button {
   font-size: 0.9rem;
@@ -1108,7 +1086,6 @@ body[data-page="jobs"] .apply-button {
     font-size: 0.85rem;
   }
 
-  body[data-page="jobs"] #logout-button,
   body[data-page="jobs"] .details-button,
   body[data-page="jobs"] .apply-button {
     font-size: 0.9rem;
@@ -1243,6 +1220,19 @@ body[data-page="job"] {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.job-thumbnail video,
+.job-thumbnail iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #000;
+}
+
+.job-thumbnail video {
+  object-fit: contain;
 }
 
 .job-thumbnail--placeholder {
@@ -1842,5 +1832,4 @@ body[data-page="cancel-policy"] .policy-pdf-frame iframe {
     height: 34px;
   }
 }
-
 

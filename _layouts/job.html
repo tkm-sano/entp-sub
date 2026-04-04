@@ -88,16 +88,10 @@
       const jobId = button.dataset.jobId;
       const apiUrl = window.MENU_TALENT_API_URL || "";
       const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
-      const routes = window.MENU_TALENT_ROUTES || { login: "/", jobs: "/jobs/" };
-      const sessionKey = "menuTalentSessionV1";
 
       if (!apiUrl) {
         alert("API設定が未完了です。env.js を確認してください。");
         return;
-      }
-
-      function loadSession() {
-        try { return JSON.parse(sessionStorage.getItem(sessionKey)) || null; } catch { return null; }
       }
 
       function jsonpRequest(params, timeoutMs) {
@@ -116,8 +110,6 @@
 
       function readableApiError(response) {
         const code = String(response?.errorCode || response?.code || "");
-        if (code === "invalid_credentials") return "名前またはパスワードが正しくありません。";
-        if (code === "invalid_token" || code === "token_expired") return "セッションが無効です。再ログインしてください。";
         if (code === "already_applied") return "この案件には既に応募済みです。";
         if (code === "consent_required") return "キャンセルポリシーの確認が必要です。";
         if (code === "quota_full") return "応募人数が上限に達しています。";
@@ -168,6 +160,103 @@
         if (!el) return;
         const text = value === undefined || value === null ? "" : String(value).trim();
         el.textContent = text || fallback;
+      }
+
+      function escapeHtml(text) {
+        return String(text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function extractDriveFileId(text) {
+        const raw = String(text || "").trim();
+        if (!raw) return "";
+
+        const m1 = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (m1 && m1[1]) return m1[1];
+
+        const m2 = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (m2 && m2[1]) return m2[1];
+
+        const m3 = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (m3 && m3[1]) return m3[1];
+
+        return "";
+      }
+
+      function normalizeYouTubeEmbedUrl(rawUrl) {
+        const raw = String(rawUrl || "").trim();
+        if (!raw) return "";
+
+        const short = raw.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/i);
+        if (short && short[1]) {
+          return `https://www.youtube.com/embed/${short[1]}`;
+        }
+
+        const normal = raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/i);
+        if (normal && normal[1]) {
+          return `https://www.youtube.com/embed/${normal[1]}`;
+        }
+
+        const embed = raw.match(/^https?:\/\/(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/i);
+        if (embed && embed[1]) {
+          return `https://www.youtube.com/embed/${embed[1]}`;
+        }
+
+        return "";
+      }
+
+      function resolveThumbnailMediaSource(job) {
+        const raw = pickFirst(
+          job.thumbnail_url,
+          job.eyecatch_image,
+          job.eyecatch_url,
+          job.eye_catch_image,
+          job.eye_catch_url,
+          job.image,
+          job.video_url,
+          job.movie_url,
+          job.video,
+          job.media_url,
+          job.media,
+          job.file_url,
+          job["画像"],
+          job["画像URL"],
+          job["動画"],
+          job["動画URL"],
+          job["画像・動画"],
+          job["画像・動画URL"]
+        );
+
+        const url = String(raw || "").trim();
+        if (!url) {
+          return { type: "none", url: "" };
+        }
+
+        const yt = normalizeYouTubeEmbedUrl(url);
+        if (yt) {
+          return { type: "iframe", url: yt };
+        }
+
+        if (/^https?:\/\/drive\.google\.com\//i.test(url)) {
+          const driveId = extractDriveFileId(url);
+          if (driveId) {
+            return { type: "iframe", url: `https://drive.google.com/file/d/${driveId}/preview` };
+          }
+        }
+
+        if (/\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(url)) {
+          return { type: "video", url };
+        }
+
+        if (/\.(png|jpe?g|gif|webp|avif|svg)(?:$|[?#])/i.test(url)) {
+          return { type: "image", url };
+        }
+
+        return { type: "image", url };
       }
 
       function calculateRemainingDays(deadline) {
@@ -287,16 +376,8 @@
         // 選考方法
         const selectionMethod = pickFirst(job.selection_method, job.selection_process, job.method, job["選考方法"]);
         
-        // サムネイル
-        const thumbnailRaw =
-          job.thumbnail_url ||
-          job.eyecatch_image ||
-          job.eyecatch_url ||
-          job.eye_catch_image ||
-          job.eye_catch_url ||
-          job.image ||
-          "";
-        const thumbnail = String(thumbnailRaw || "").trim();
+        // サムネイル（画像/動画のどちらでも表示）
+        const mediaSource = resolveThumbnailMediaSource(job);
         const thumbnailEl = document.getElementById("job-thumbnail");
 
         // メタセクション表示
@@ -323,8 +404,16 @@
         setTextOrFallback("job-selection-method", selectionMethod, "-");
 
         if (thumbnailEl) {
-          if (thumbnail) {
-            thumbnailEl.innerHTML = `<img src="${thumbnail.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;")}" alt="${String(job.title || "案件サムネイル").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;")}">`;
+          const titleEscaped = escapeHtml(String(job.title || "案件サムネイル"));
+
+          if (mediaSource.type === "iframe") {
+            thumbnailEl.innerHTML = `<iframe src="${escapeHtml(mediaSource.url)}" title="${titleEscaped}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+            thumbnailEl.classList.remove("job-thumbnail--placeholder");
+          } else if (mediaSource.type === "video") {
+            thumbnailEl.innerHTML = `<video src="${escapeHtml(mediaSource.url)}" controls playsinline preload="metadata"></video>`;
+            thumbnailEl.classList.remove("job-thumbnail--placeholder");
+          } else if (mediaSource.type === "image") {
+            thumbnailEl.innerHTML = `<img src="${escapeHtml(mediaSource.url)}" alt="${titleEscaped}">`;
             thumbnailEl.classList.remove("job-thumbnail--placeholder");
           } else {
             thumbnailEl.innerHTML = "<span>NO IMAGE</span>";
@@ -334,8 +423,6 @@
       }
 
       async function loadJobDetail() {
-        const session = loadSession();
-        if (!session) { window.location.href = routes.login || "/"; return; }
         if (!jobId) { alert("案件IDが見つかりません。"); return; }
 
         try {
@@ -343,7 +430,7 @@
 
           // 優先: 単一案件APIで転送量を削減して表示を高速化
           const singleData = await jsonpRequest(
-            { action: "getJob", token: session.token, jobId },
+            { action: "getJob", jobId },
             apiTimeoutMs
           );
 
@@ -351,7 +438,7 @@
             job = singleData.job;
           } else if (String(singleData?.errorCode || "") === "invalid_action") {
             // API未反映時の互換フォールバック
-            const listData = await jsonpRequest({ action: "listJobs", token: session.token }, apiTimeoutMs);
+            const listData = await jsonpRequest({ action: "listJobs" }, apiTimeoutMs);
             if (!listData.ok) {
               alert(readableApiError(listData));
               return;
@@ -390,9 +477,10 @@
       });
 
       confirmApplyButton?.addEventListener("click", async () => {
-        const session = loadSession();
-        if (!session) { alert("セッションが無効です。ログインしてください。"); return; }
         if (!hasRequiredConsents()) { alert("キャンセルポリシーの確認が必要です。"); return; }
+
+        const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
+        if (!applicantName) { alert("応募者名を入力してください。"); return; }
 
         const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
         if (!contactEmail || !contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
@@ -401,16 +489,15 @@
         confirmApplyButton.disabled = true;
 
         try {
-          const data = await jsonpRequest(
-            {
-              action: "apply",
-              token: session.token,
-              jobId,
-              contactEmail: contactEmail.trim(),
-              acceptedCancelPolicy: "true"
-            },
-            apiTimeoutMs
-          );
+          const payload = {
+            action: "apply",
+            jobId,
+            applicantName,
+            contactEmail: contactEmail.trim(),
+            acceptedCancelPolicy: "true"
+          };
+
+          const data = await jsonpRequest(payload, apiTimeoutMs);
 
           if (!data.ok) {
             alert(readableApiError(data));

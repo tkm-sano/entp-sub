@@ -184,8 +184,6 @@ function handleRequest_(e) {
 
     if (action === "health") {
       payload = { ok: true, build: API_BUILD };
-    } else if (action === "login") {
-      payload = login_(params);
     } else if (action === "listJobs") {
       payload = listJobs_(params);
     } else if (action === "getJob") {
@@ -210,52 +208,6 @@ function handleRequest_(e) {
       elapsedMs: Date.now() - startedAt
     });
   }
-}
-
-/* =========================================
-   LOGIN（名簿=TALENT_SPREADSHEET_ID）
-========================================= */
-
-function login_(params) {
-  const name = normalizeName_(params.name);
-  const password = String(params.password || "").trim();
-
-  if (!name || !password) {
-    throw apiError_("invalid_credentials", "認証情報不足");
-  }
-
-  if (password !== getLoginPassword_()) {
-    throw apiError_("invalid_credentials", "パスワード不一致");
-  }
-
-  const users = readUsers_();
-  const user = users.find(u => u.normalizedName === name);
-
-  if (!user) {
-    throw apiError_("invalid_credentials", "ユーザー不存在");
-  }
-
-  const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
-
-  const token = signToken_({
-    uid: user.uid,
-    name: user.name,
-    role: "talent",
-    email: user.email,
-    exp: expiresAt
-  });
-
-  return {
-    ok: true,
-    session: {
-      token,
-      uid: user.uid,
-      name: user.name,
-      role: "talent",
-      email: user.email,
-      expiresAt
-    }
-  };
 }
 
 /* =========================================
@@ -359,8 +311,6 @@ function clearTalentUsersCache_() {
 ========================================= */
 
 function listJobs_(params) {
-  verifyToken_(params.token);
-
   const sheet = getJobsSheet_();
   const range = sheet.getDataRange();
   const values = range.getValues();
@@ -412,8 +362,6 @@ function listJobs_(params) {
 }
 
 function getJob_(params) {
-  verifyToken_(params.token);
-
   const jobId = String(params.jobId || "").trim();
   if (!jobId) {
     throw apiError_("invalid_param", "jobId 必須");
@@ -511,12 +459,20 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
 ========================================= */
 
 function apply_(params) {
-  const tokenPayload = verifyToken_(params.token);
+  const rawToken = String(params.token || "").trim();
+  const tokenPayload = rawToken ? verifyToken_(rawToken) : null;
+  const applicantName = tokenPayload?.name
+    ? normalizeName_(tokenPayload.name)
+    : normalizeName_(params.applicantName);
   const jobId = String(params.jobId || "").trim();
   const acceptedCancelPolicy = String(params.acceptedCancelPolicy || "").trim().toLowerCase() === "true";
 
   if (!jobId) {
     throw apiError_("invalid_param", "jobId 必須");
+  }
+
+  if (!applicantName) {
+    throw apiError_("invalid_param", "応募者名 必須");
   }
 
   if (!acceptedCancelPolicy) {
@@ -580,11 +536,11 @@ function apply_(params) {
       throw apiError_("quota_full", "定員に達しています");
     }
 
-    if (applicantsList.includes(tokenPayload.name)) {
+    if (applicantsList.includes(applicantName)) {
       throw apiError_("already_applied", "既に応募済みです");
     }
 
-    applicantsList.push(tokenPayload.name);
+    applicantsList.push(applicantName);
     const newCount = applicantsList.length;
 
     if (countCol >= 0) {
@@ -592,7 +548,7 @@ function apply_(params) {
     }
     sheet.getRange(sheetRow, applicantsCol + 1).setValue(applicantsList.join("\n"));
 
-    sendConfirmationEmail_(contactEmail, tokenPayload.name, title, deadline);
+    sendConfirmationEmail_(contactEmail, applicantName, title, deadline);
 
     return {
       ok: true,
@@ -804,10 +760,6 @@ function getProperty_(key) {
 function getOptionalProperty_(key) {
   const value = PropertiesService.getScriptProperties().getProperty(key);
   return value == null ? "" : String(value).trim();
-}
-
-function getLoginPassword_() {
-  return getProperty_("LOGIN_PASSWORD");
 }
 
 function getTalentUsersCacheKey_() {
