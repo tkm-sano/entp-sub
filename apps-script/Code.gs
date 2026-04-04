@@ -1003,6 +1003,14 @@ function isDeadlinePassed_(deadlineValue) {
 }
 
 function calculateRemainingDaysLabel_(deadlineValue) {
+  const raw = String(deadlineValue || "").trim();
+  if (/^残り\s*\d+\s*日$/.test(raw)) {
+    return raw.replace(/\s+/g, "");
+  }
+  if (/^\d+\s*日$/.test(raw)) {
+    return `残り${raw.replace(/\s+/g, "")}`;
+  }
+
   const d = parseDate_(deadlineValue);
   if (!d) {
     return "";
@@ -1018,7 +1026,7 @@ function calculateRemainingDaysLabel_(deadlineValue) {
   if (diffDays < 0) {
     return "期限切れ";
   }
-  return `${diffDays}日`;
+  return `残り${diffDays}日`;
 }
 
 function normalizeNumber_(value) {

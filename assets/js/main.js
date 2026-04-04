@@ -124,7 +124,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
     const raw = String(deadline).trim();
-    if (/^\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
+    if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
+    if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
     const today = new Date();
     const d = new Date(deadline);
     if (isNaN(d.getTime())) return "未定";
@@ -133,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) return "期限切れ";
-    return `${diffDays} 日`;
+    return `残り${diffDays}日`;
   }
 
   function pickFirst(...values) {
