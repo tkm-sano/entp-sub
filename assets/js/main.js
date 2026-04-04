@@ -136,6 +136,121 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${diffDays} 日`;
   }
 
+  function pickFirst(...values) {
+    for (const value of values) {
+      const text = String(value || "").trim();
+      if (text) return text;
+    }
+    return "";
+  }
+
+  function extractDriveFileId(rawUrl) {
+    const raw = String(rawUrl || "").trim();
+    if (!raw) return "";
+
+    const m1 = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m1 && m1[1]) return m1[1];
+
+    const m2 = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m2 && m2[1]) return m2[1];
+
+    const m3 = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m3 && m3[1]) return m3[1];
+
+    return "";
+  }
+
+  function normalizeYouTubeEmbedUrl(rawUrl) {
+    const raw = String(rawUrl || "").trim();
+    if (!raw) return "";
+
+    const short = raw.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/i);
+    if (short && short[1]) {
+      return `https://www.youtube.com/embed/${short[1]}`;
+    }
+
+    const normal = raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/i);
+    if (normal && normal[1]) {
+      return `https://www.youtube.com/embed/${normal[1]}`;
+    }
+
+    const embed = raw.match(/^https?:\/\/(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/i);
+    if (embed && embed[1]) {
+      return `https://www.youtube.com/embed/${embed[1]}`;
+    }
+
+    return "";
+  }
+
+  function resolveCardMediaSource(job) {
+    const raw = pickFirst(
+      job.thumbnail_url,
+      job.eyecatch_image,
+      job.eyecatch_url,
+      job.eye_catch_image,
+      job.eye_catch_url,
+      job.image,
+      job.video_url,
+      job.movie_url,
+      job.video,
+      job.media_url,
+      job.media,
+      job.file_url,
+      job["画像"],
+      job["画像URL"],
+      job["動画"],
+      job["動画URL"],
+      job["画像・動画"],
+      job["画像・動画URL"]
+    );
+
+    const url = String(raw || "").trim();
+    if (!url) {
+      return { type: "none", url: "" };
+    }
+
+    const yt = normalizeYouTubeEmbedUrl(url);
+    if (yt) {
+      return { type: "iframe", url: yt };
+    }
+
+    if (/^https?:\/\/drive\.google\.com\//i.test(url)) {
+      const driveId = extractDriveFileId(url);
+      if (driveId) {
+        return { type: "iframe", url: `https://drive.google.com/file/d/${driveId}/preview` };
+      }
+    }
+
+    if (/\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(url)) {
+      return { type: "video", url };
+    }
+
+    if (/\.(png|jpe?g|gif|webp|avif|svg)(?:$|[?#])/i.test(url)) {
+      return { type: "image", url };
+    }
+
+    return { type: "image", url };
+  }
+
+  function renderCardMedia(job) {
+    const mediaSource = resolveCardMediaSource(job);
+    const alt = escapeHtml(String(job.title || "案件"));
+
+    if (mediaSource.type === "iframe") {
+      return `<div class="job-card__eyecatch"><iframe src="${escapeHtml(mediaSource.url)}" title="${alt}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`;
+    }
+
+    if (mediaSource.type === "video") {
+      return `<div class="job-card__eyecatch"><video src="${escapeHtml(mediaSource.url)}" muted playsinline preload="metadata"></video></div>`;
+    }
+
+    if (mediaSource.type === "image") {
+      return `<div class="job-card__eyecatch"><img src="${escapeHtml(mediaSource.url)}" alt="${alt}" loading="lazy" decoding="async"></div>`;
+    }
+
+    return `<div class="job-card__eyecatch job-card__eyecatch--placeholder"><span>NO IMAGE</span></div>`;
+  }
+
   function renderJobs() {
     if (!jobEls.jobsList) return;
 
@@ -198,18 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
         : "未設定";
       const fee = job.fee ? escapeHtml(String(job.fee)) : "未設定";
-      const eyeCatchRaw =
-        job.eyecatch_image ||
-        job.eyecatch_url ||
-        job.eye_catch_image ||
-        job.eye_catch_url ||
-        job.thumbnail_url ||
-        job.image ||
-        "";
-      const eyeCatch = String(eyeCatchRaw || "").trim();
-      const eyeCatchHtml = eyeCatch
-        ? `<div class="job-card__eyecatch"><img src="${escapeHtml(eyeCatch)}" alt="${escapeHtml(String(job.title || "案件"))}" loading="lazy" decoding="async"></div>`
-        : `<div class="job-card__eyecatch job-card__eyecatch--placeholder"><span>NO IMAGE</span></div>`;
+      const eyeCatchHtml = renderCardMedia(job);
 
       // 「詳細ページ」リンクボタンに変更
       return `
