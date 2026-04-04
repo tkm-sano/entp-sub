@@ -15,6 +15,9 @@ const TALENT_USERS_CACHE_KEY = "talent_users_v2";
 const DEFAULT_TALENT_USERS_CACHE_SECONDS = 300;
 const DEFAULT_RETRY_COUNT = 3;
 const DEFAULT_RETRY_BASE_MS = 250;
+const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
+const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
 
 /* =========================================
    Spreadsheet Menu
@@ -32,8 +35,19 @@ function runGitHubActionsFromMenu_() {
   const ref = getDefaultGitHubRef_();
 
   try {
-    triggerGitHubWorkflowDispatch_(ref);
-    ui.alert("GitHub Actions を起動しました。");
+    const result = triggerGitHubWorkflowDispatch_(ref);
+    const lines = [
+      `GitHub Actions が完了しました。`,
+      `workflow: ${result.workflowId}`,
+      `branch: ${result.ref}`,
+      `status: ${result.conclusion || result.status || "completed"}`
+    ];
+
+    if (result.runUrl) {
+      lines.push(`run: ${result.runUrl}`);
+    }
+
+    ui.alert(lines.join("\n"));
   } catch (err) {
     ui.alert(
       "GitHub Actions エラー",
@@ -52,9 +66,10 @@ function triggerGitHubWorkflowDispatch_(ref) {
   const props = PropertiesService.getScriptProperties();
   const owner = mustGetScriptProperty_("GITHUB_OWNER");
   const repo = mustGetScriptProperty_("GITHUB_REPO");
-  const workflowId = mustGetScriptProperty_("GITHUB_WORKFLOW_ID");
+  const workflowId = getWorkflowId_();
   const token = mustGetScriptProperty_("GITHUB_TOKEN");
   const inputsJson = String(props.getProperty("GITHUB_WORKFLOW_INPUTS_JSON") || "").trim();
+  const dispatchedAt = new Date();
 
   let inputs = {};
   if (inputsJson) {
@@ -92,7 +107,17 @@ function triggerGitHubWorkflowDispatch_(ref) {
     throw apiError_("github_dispatch_failed", detail);
   }
 
-  return `repo=${owner}/${repo}, workflow=${workflowId}, ref=${ref}`;
+  const run = waitForWorkflowRunCompletion_(owner, repo, workflowId, ref, token, dispatchedAt);
+  return {
+    owner,
+    repo,
+    workflowId,
+    ref,
+    runId: run.id,
+    runUrl: run.html_url,
+    status: run.status,
+    conclusion: run.conclusion
+  };
 }
 
 function buildGitHubDispatchErrorMessage_(statusCode, body, owner, repo, workflowId, ref) {
@@ -148,6 +173,82 @@ function mustGetScriptProperty_(key) {
     throw apiError_("config_error", `${key} 未設定`);
   }
   return value;
+}
+
+function getWorkflowId_() {
+  const value = String(PropertiesService.getScriptProperties().getProperty("GITHUB_WORKFLOW_ID") || "").trim();
+  return value || DEFAULT_GITHUB_WORKFLOW_ID;
+}
+
+function waitForWorkflowRunCompletion_(owner, repo, workflowId, ref, token, dispatchedAt) {
+  const deadline = Date.now() + GITHUB_RUN_POLL_TIMEOUT_MS;
+  let run = null;
+
+  while (Date.now() < deadline) {
+    run = findDispatchedWorkflowRun_(owner, repo, workflowId, ref, token, dispatchedAt);
+
+    if (run && run.status === "completed") {
+      if (run.conclusion !== "success") {
+        const detail = [
+          `workflow が失敗しました: conclusion=${run.conclusion || "unknown"}`,
+          `run=${run.html_url || ""}`
+        ].join("\n");
+        throw apiError_("github_workflow_failed", detail);
+      }
+      return run;
+    }
+
+    Utilities.sleep(GITHUB_RUN_POLL_INTERVAL_MS);
+  }
+
+  throw apiError_(
+    "github_workflow_timeout",
+    `workflow の完了待機がタイムアウトしました。workflow=${workflowId}, ref=${ref}`
+  );
+}
+
+function findDispatchedWorkflowRun_(owner, repo, workflowId, ref, token, dispatchedAt) {
+  const encodedRef = encodeURIComponent(ref);
+  const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/${encodeURIComponent(workflowId)}/runs?event=workflow_dispatch&branch=${encodedRef}&per_page=10`;
+
+  const res = UrlFetchApp.fetch(url, {
+    method: "get",
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  });
+
+  const code = res.getResponseCode();
+  const body = res.getContentText();
+
+  if (code !== 200) {
+    throw apiError_("github_runs_failed", `GitHub runs API エラー: status=${code}, body=${body}`);
+  }
+
+  let payload;
+  try {
+    payload = body ? JSON.parse(body) : {};
+  } catch (err) {
+    throw apiError_("github_runs_failed", `GitHub runs API の応答JSONが不正です: ${err.message}`);
+  }
+
+  const runs = Array.isArray(payload?.workflow_runs) ? payload.workflow_runs : [];
+  const dispatchedTime = dispatchedAt.getTime() - 30000;
+
+  for (const candidate of runs) {
+    const createdAt = Date.parse(String(candidate?.created_at || ""));
+    if (!Number.isFinite(createdAt)) {
+      continue;
+    }
+    if (createdAt >= dispatchedTime) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 /* =========================================
