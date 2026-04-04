@@ -1,25 +1,25 @@
 ---
 layout: job
-title: "Sample Job 1"
+title: "Sample Job 2"
 job_id: "job_2"
 category: "Sample"
-client_name: "Sample Client"
-client_email: "client1@example.com"
-shooting_content: "Catalog shoot for spring collection"
-concept: "Bright, clean, and minimal styling"
-shooting_dates: "2026-03-10 or 2026-03-12"
-duration: "4時間"
-shooting_location: "Tokyo (studio)"
-usage_media: "Web, social"
-usage_period: "6 months"
-competition: "No direct competitor on same day"
+client_name: "Sample Client 2"
+client_email: "client2@example.com"
+shooting_content: "Brand video short cut"
+concept: "Natural, candid lifestyle"
+shooting_dates: "2026-04-01"
+duration: "6時間"
+shooting_location: "Osaka (on location)"
+usage_media: "TV, web"
+usage_period: "12 months"
+competition: "Must avoid competing brand for 3 months"
 makeup: ""
-fee: "JPY 30,000"
-belongings: "Makeup kit, basic wardrobe"
-max_applicants: 3
-applicant_count: 0
-deadline: "2026-03-31"
-form_url: "https://example.com/apply/job1"
+fee: "JPY 50,000"
+belongings: "Comfortable shoes"
+max_applicants: 5
+applicant_count: 1
+deadline: "2026-04-15"
+form_url: "https://example.com/apply/job2"
 deadline_notified_at: ""
 ---
 <p>案件詳細はここに記載</p>

@@ -15,41 +15,88 @@
 </head>
 <body data-page="job">
   <main class="job-page">
-    <section class="job-thumbnail-wrap">
-      <div id="job-thumbnail" class="job-thumbnail job-thumbnail--placeholder" aria-label="案件サムネイル">
-        <span>NO IMAGE</span>
-      </div>
+    <section class="job-stage">
+      <section class="job-thumbnail-wrap">
+        <div id="job-thumbnail" class="job-thumbnail job-thumbnail--placeholder" aria-label="案件サムネイル">
+          <span>NO IMAGE</span>
+        </div>
+      </section>
+
+      <section class="job-hero">
+        <div class="job-hero__panel">
+          <p id="job-kicker" class="job-kicker">Casting Opportunity</p>
+          <h1 id="job-title">案件詳細を読み込み中...</h1>
+          <p id="job-hero-summary" class="job-hero-summary">条件と募集内容を確認してください。</p>
+
+          <div class="job-highlight-grid" aria-label="案件ハイライト">
+            <div class="job-highlight-card">
+              <span class="job-highlight-card__label">報酬</span>
+              <strong id="job-hero-reward" class="job-highlight-card__value">-</strong>
+            </div>
+            <div class="job-highlight-card">
+              <span class="job-highlight-card__label">実施日</span>
+              <strong id="job-hero-date" class="job-highlight-card__value">-</strong>
+            </div>
+            <div class="job-highlight-card">
+              <span class="job-highlight-card__label">場所</span>
+              <strong id="job-hero-location" class="job-highlight-card__value">-</strong>
+            </div>
+            <div class="job-highlight-card">
+              <span class="job-highlight-card__label">残り日数</span>
+              <strong id="job-hero-remaining" class="job-highlight-card__value">未定</strong>
+            </div>
+          </div>
+
+          <div class="job-hero-actions">
+            <button id="apply-button" data-job-id="{{ page.job_id }}">応募する</button>
+            <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <!-- メタセクション（ヘッダー） -->
-    <!-- 対応: title -->
-    <section class="job-hero">
-      <h1 id="job-title">案件詳細を読み込み中...</h1>
-    </section>
-
-    <!-- 詳細セクション -->
     <section class="job-content">
-      <div class="job-detail-list">
-        <div class="job-detail-item"><span class="job-detail-label">報酬</span><span id="job-total-reward">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">実施日時</span><span id="job-implementation-date">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">-</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">残り日数</span><span id="job-remaining-days">未定</span></div>
-        <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">-</span></div>
-      </div>
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <p class="job-section-heading__eyebrow">Overview</p>
+          <h2>募集条件</h2>
+        </div>
+        <div class="job-detail-list">
+          <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">-</span></div>
+        </div>
+      </section>
+
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <p class="job-section-heading__eyebrow">Creative</p>
+          <h2>撮影内容</h2>
+        </div>
+        <div class="job-detail-list">
+          <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">-</span></div>
+        </div>
+      </section>
+
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <p class="job-section-heading__eyebrow">Application</p>
+          <h2>応募条件</h2>
+        </div>
+        <div class="job-detail-list">
+          <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">-</span></div>
+        </div>
+      </section>
 
       <div class="job-apply">
-        <button id="apply-button" data-job-id="{{ page.job_id }}">応募する</button>
+        <button id="apply-button-bottom" data-apply-trigger="true" type="button">この案件に応募する</button>
         <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
       </div>
     </section>
@@ -79,6 +126,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const button = document.getElementById("apply-button");
+      const secondaryApplyButton = document.getElementById("apply-button-bottom");
       const modal = document.getElementById("apply-confirm-modal");
       const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
       const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
@@ -382,7 +430,15 @@
 
         // メタセクション表示
         const resolvedTitle = pickFirst(job.title, job.name, job.job_title, "案件詳細");
+        const category = pickFirst(job.category, job["カテゴリ"], media);
+        const heroSummary = pickFirst(concept, description, requirements, "条件と募集内容を確認してください。");
         setText("job-title", resolvedTitle);
+        setTextOrFallback("job-kicker", category, "Casting Opportunity");
+        setTextOrFallback("job-hero-summary", heroSummary, "条件と募集内容を確認してください。");
+        setTextOrFallback("job-hero-reward", totalReward, "-");
+        setTextOrFallback("job-hero-date", implementationDate, "-");
+        setTextOrFallback("job-hero-location", location, "-");
+        setText("job-hero-remaining", remainingDays);
         document.title = `${resolvedTitle} | 案件詳細`;
 
         // 詳細セクション表示
@@ -472,8 +528,10 @@
       });
       cancelConfirmButton?.addEventListener("click", closeConfirmModal);
 
-      button.addEventListener("click", () => {
-        openConfirmModal();
+      [button, secondaryApplyButton].forEach((applyTrigger) => {
+        applyTrigger?.addEventListener("click", () => {
+          openConfirmModal();
+        });
       });
 
       confirmApplyButton?.addEventListener("click", async () => {

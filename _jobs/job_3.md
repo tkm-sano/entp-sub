@@ -1,25 +1,25 @@
 ---
 layout: job
-title: "Sample Job 2"
+title: "夏の新作飲料WebCM"
 job_id: "job_3"
-category: "Sample"
-client_name: "Sample Client 2"
-client_email: "client2@example.com"
-shooting_content: "Brand video short cut"
-concept: "Natural, candid lifestyle"
-shooting_dates: "2026-04-01"
+category: "Web広告"
+client_name: "株式会社ドリンク"
+client_email: "info@drink.co.jp"
+shooting_content: "海辺での爽やかな飲用シーン"
+concept: "夏の渇きを潤す"
+shooting_dates: "2026-03-10〜03-12"
 duration: "6時間"
-shooting_location: "Osaka (on location)"
-usage_media: "TV, web"
-usage_period: "12 months"
-competition: "Must avoid competing brand for 3 months"
+shooting_location: "湘南海岸"
+usage_media: "Web・SNS"
+usage_period: "1年間"
+competition: "あり"
 makeup: ""
-fee: "JPY 50,000"
-belongings: "Comfortable shoes"
-max_applicants: 5
-applicant_count: 1
-deadline: "2026-04-15"
-form_url: "https://example.com/apply/job2"
-deadline_notified_at: ""
+fee: "5000円"
+belongings: "白Tシャツ、デニム"
+max_applicants: 20
+applicant_count: 0
+deadline: "2026-03-01"
+form_url: "https://ex.com/f1"
+deadline_notified_at: "2026-02-25"
 ---
 <p>案件詳細はここに記載</p>

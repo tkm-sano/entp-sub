@@ -306,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const currentRaw = Number(job.applicant_count ?? job.applicantCount);
       const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
       const current = Number.isFinite(currentRaw) ? `${currentRaw}人` : "0人";
+      const category = escapeHtml(String(job.category || job.media || "Casting").trim());
       const rawJobId = String(job.job_id || job.id || "");
       const jobSlug = escapeHtml(rawJobId.trim().replace(/_/g, "-"));
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
@@ -321,16 +322,21 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="job-card">
             ${eyeCatchHtml}
             <div class="job-card__header">
+              <div class="job-card__header-top">
+                <span class="job-card__category">${category}</span>
+                <span class="job-card__remaining">${escapeHtml(remainingDays)}</span>
+              </div>
               <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
             </div>
             <div class="job-card__body">
-              <p class="job-card__meta-item job-card__deadline"><span class="job-card__meta-label">締切まで</span><span class="job-card__meta-value">${escapeHtml(remainingDays)}</span></p>
               <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">時給</span><span class="job-card__meta-value">${escapeHtml(hourlyWage)}</span></p>
               <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">報酬</span><span class="job-card__meta-value">${fee}</span></p>
               <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">募集枠</span><span class="job-card__meta-value">${escapeHtml(capacity)}</span></p>
               <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">応募数</span><span class="job-card__meta-value">${escapeHtml(current)}</span></p>
             </div>
-            <div class="job-card__footer"></div>
+            <div class="job-card__footer">
+              <span class="job-card__cta">詳細を見る</span>
+            </div>
           </div>
         </a>
       `;
