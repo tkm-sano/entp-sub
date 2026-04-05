@@ -48,7 +48,7 @@
           </div>
 
           <div class="job-hero-actions">
-            <button id="apply-button" data-job-id="{{ page.job_id }}">応募する</button>
+            <button id="apply-button" data-job-id="{{ page.job_id | default: '' }}">応募する</button>
             <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
           </div>
         </div>
@@ -133,7 +133,9 @@
       const confirmApplyButton = document.getElementById("confirm-apply-button");
       if (!button) return;
 
-      const jobId = button.dataset.jobId;
+      const pageJobId = String(button.dataset.jobId || "").trim();
+      const queryJobId = new URLSearchParams(window.location.search).get("jobId") || "";
+      const jobId = pageJobId || String(queryJobId).trim();
       const apiUrl = window.MENU_TALENT_API_URL || "";
       const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
 

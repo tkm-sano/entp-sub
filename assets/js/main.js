@@ -308,8 +308,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
       const current = Number.isFinite(currentRaw) ? `${currentRaw}人` : "0人";
       const category = escapeHtml(String(job.category || job.media || "Casting").trim());
-      const rawJobId = String(job.job_id || job.id || "");
-      const jobSlug = escapeHtml(rawJobId.trim().replace(/_/g, "-"));
+      const rawJobId = String(job.job_id || job.id || "").trim();
+      const encodedJobId = encodeURIComponent(rawJobId);
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
       const hourlyWage = Number.isFinite(Number(job.hourly_wage ?? job.hourlyWage))
         ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
@@ -319,7 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // 「詳細ページ」リンクボタンに変更
       return `
-        <a class="job-card-link" href="${jobsBase}${jobSlug}/">
+        <a class="job-card-link" href="${jobsBase}detail/?jobId=${encodedJobId}">
           <div class="job-card">
             ${eyeCatchHtml}
             <div class="job-card__header">

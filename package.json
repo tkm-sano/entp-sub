@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Local preview helpers for the Jekyll-based talent site.",
   "scripts": {
+    "generate:jobs": "node scripts/generate_job_pages.js",
     "preview": "LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 bundle exec jekyll serve --host 127.0.0.1 --port 4000",
     "build": "LANG=ja_JP.UTF-8 LC_ALL=ja_JP.UTF-8 bundle exec jekyll build",
     "doctor": "bundle exec jekyll doctor"
