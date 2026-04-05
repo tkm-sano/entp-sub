@@ -18,6 +18,9 @@ const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
+const JOB_ID_PREFIX = "job_";
+const JOB_ID_DIGITS = 3;
+const HEADER_ROW = 1;
 
 /* =========================================
    Spreadsheet Menu
@@ -26,8 +29,42 @@ const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("更新")
+    .addItem("空の job_id を採番", "fillMissingJobIds")
     .addItem("編集をWebページに反映", "runGitHubActionsFromMenu_")
     .addToUi();
+}
+
+function onEdit(e) {
+  if (!e || !e.range) {
+    return;
+  }
+
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== SHEET_NAMES.jobs) {
+    return;
+  }
+
+  if (e.range.getRow() <= HEADER_ROW) {
+    return;
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(h => String(h).trim());
+
+  const jobIdCol = findColumn_(headers, "job_id", "id");
+  const titleCol = findColumn_(headers, "案件名", "title", "案件タイトル");
+
+  if (jobIdCol < 0 || titleCol < 0) {
+    return;
+  }
+
+  if (e.range.getColumn() !== titleCol + 1) {
+    return;
+  }
+
+  assignJobIdIfNeeded_(sheet, e.range.getRow(), jobIdCol, titleCol);
 }
 
 function runGitHubActionsFromMenu_() {
@@ -553,6 +590,87 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
     deadline_notified_at: colDisplay_(displayRow, notifiedCol, ""),
     applicants: colDisplay_(displayRow, applicantsCol, "")
   };
+}
+
+/* =========================================
+   job_id 採番
+========================================= */
+
+function fillMissingJobIds() {
+  const sheet = getJobsSheet_();
+  const lastCol = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow <= HEADER_ROW || lastCol <= 0) {
+    return;
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, lastCol)
+    .getValues()[0]
+    .map(h => String(h).trim());
+
+  const jobIdCol = findColumn_(headers, "job_id", "id");
+  const titleCol = findColumn_(headers, "案件名", "title", "案件タイトル");
+
+  if (jobIdCol < 0) {
+    throw apiError_("config_error", "job_id 列が見つかりません");
+  }
+
+  if (titleCol < 0) {
+    throw apiError_("config_error", "案件名列が見つかりません");
+  }
+
+  for (let row = HEADER_ROW + 1; row <= lastRow; row++) {
+    assignJobIdIfNeeded_(sheet, row, jobIdCol, titleCol);
+  }
+}
+
+function assignJobIdIfNeeded_(sheet, rowNumber, jobIdCol, titleCol) {
+  const title = String(sheet.getRange(rowNumber, titleCol + 1).getDisplayValue() || "").trim();
+  const currentJobId = String(sheet.getRange(rowNumber, jobIdCol + 1).getDisplayValue() || "").trim();
+
+  if (!title || currentJobId) {
+    return;
+  }
+
+  const nextJobId = getNextJobId_(sheet, jobIdCol);
+  sheet.getRange(rowNumber, jobIdCol + 1).setValue(nextJobId);
+}
+
+function getNextJobId_(sheet, jobIdCol) {
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow <= HEADER_ROW) {
+    return buildJobId_(1);
+  }
+
+  const values = sheet
+    .getRange(HEADER_ROW + 1, jobIdCol + 1, lastRow - HEADER_ROW, 1)
+    .getDisplayValues()
+    .flat();
+
+  let maxNumber = 0;
+
+  for (const value of values) {
+    const text = String(value || "").trim();
+    const match = text.match(/^job_(\d+)$/);
+
+    if (!match) {
+      continue;
+    }
+
+    const num = Number(match[1]);
+    if (Number.isFinite(num) && num > maxNumber) {
+      maxNumber = num;
+    }
+  }
+
+  return buildJobId_(maxNumber + 1);
+}
+
+function buildJobId_(num) {
+  return `${JOB_ID_PREFIX}${String(num).padStart(JOB_ID_DIGITS, "0")}`;
 }
 
 /* =========================================
