@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { google } from 'googleapis';
 
 // サービスアカウントの JSON キーを読み込む
@@ -18,6 +19,16 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 const spreadsheetId = process.env.SHEET_ID;
 const range = 'jobs!A:Z'; // Code.gs の SHEET_NAMES に合わせる
+const summaryDir = process.env.WORKFLOW_SUMMARY_DIR;
+
+function writeSummary(filename, payload) {
+  if (!summaryDir) {
+    return;
+  }
+
+  fs.mkdirSync(summaryDir, { recursive: true });
+  fs.writeFileSync(path.join(summaryDir, filename), JSON.stringify(payload, null, 2), 'utf-8');
+}
 
 // 環境変数の確認
 if (!spreadsheetId) {
@@ -26,6 +37,18 @@ if (!spreadsheetId) {
 }
 
 async function fetchSheet() {
+  const summary = {
+    status: 'started',
+    spreadsheetId,
+    range,
+    totalRows: 0,
+    dataRows: 0,
+    validJobs: 0,
+    detectedColumns: [],
+    missingColumns: [],
+    skippedRows: [],
+  };
+
   try {
     console.log(`スプレッドシート ID: ${spreadsheetId}`);
     console.log(`取得範囲: ${range}`);
@@ -34,13 +57,14 @@ async function fetchSheet() {
     const rows = res.data.values || [];
     
     if (!rows.length) {
-      console.error('Error: スプレッドシートにデータがありません');
-      process.exit(1);
+      throw new Error('スプレッドシートにデータがありません');
     }
 
     console.log(`取得した行数: ${rows.length} 行（ヘッダー含む）`);
 
     const [headers, ...dataRows] = rows;
+    summary.totalRows = rows.length;
+    summary.dataRows = dataRows.length;
     
     // 日本語と英語の列名の両方に対応
     const requiredColumns = [
@@ -51,12 +75,17 @@ async function fetchSheet() {
     
     // 列名の正規化処理
     const normalizedHeaders = headers.map(h => String(h).trim());
+    summary.detectedColumns = normalizedHeaders;
     const headerMap = {};
     
     for (const col of requiredColumns) {
       const found = normalizedHeaders.find(h => h === col.en || h === col.jp);
       if (!found) {
         console.warn(`Warning: "${col.en}" または "${col.jp}" カラムが見つかりません`);
+        summary.missingColumns.push({
+          key: col.en,
+          labels: [col.en, col.jp],
+        });
       } else {
         headerMap[col.en] = found;
       }
@@ -75,7 +104,12 @@ async function fetchSheet() {
         // titleまたは案件名が空の行はスキップ
         const title = String(job['title'] || job['案件名'] || '').trim();
         if (!title) {
-          console.log(`行 ${index + 2} をスキップ: 案件名が空です`);
+          const rowNumber = index + 2;
+          console.log(`行 ${rowNumber} をスキップ: 案件名が空です`);
+          summary.skippedRows.push({
+            rowNumber,
+            reason: '案件名が空です',
+          });
           return null;
         }
         
@@ -84,13 +118,23 @@ async function fetchSheet() {
       .filter(Boolean); // null を除外
 
     console.log(`有効な求人データ: ${jobs.length} 件`);
+    summary.validJobs = jobs.length;
 
     // _data/jobs.json に保存
     const outputPath = '../../_data/jobs.json';
     fs.writeFileSync(outputPath, JSON.stringify(jobs, null, 2), 'utf-8');
     console.log(`✓ ${outputPath} を生成しました（${jobs.length} 件）`);
+    summary.status = 'success';
+    summary.outputPath = outputPath;
+    writeSummary('fetch-summary.json', summary);
     
   } catch (error) {
+    summary.status = 'error';
+    summary.errorMessage = error.message;
+    if (error.code) {
+      summary.errorCode = error.code;
+    }
+    writeSummary('fetch-summary.json', summary);
     console.error('Error: スプレッドシートの取得に失敗しました');
     console.error('詳細:', error.message);
     if (error.code) console.error('エラーコード:', error.code);
@@ -99,6 +143,12 @@ async function fetchSheet() {
 }
 
 fetchSheet().catch(error => {
+  writeSummary('fetch-summary.json', {
+    status: 'error',
+    spreadsheetId,
+    range,
+    errorMessage: error.message,
+  });
   console.error('Fatal Error:', error.message);
   process.exit(1);
 });

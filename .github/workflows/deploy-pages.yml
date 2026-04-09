@@ -17,24 +17,75 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WORKFLOW_SUMMARY_DIR: ${{ runner.temp }}/pages-summary
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prepare summary directory
+        run: mkdir -p "$WORKFLOW_SUMMARY_DIR"
+
+      - name: Capture pushed changes
+        shell: bash
+        run: |
+          before_sha="${{ github.event.before }}"
+          current_sha="${{ github.sha }}"
+
+          if [ -n "$before_sha" ] && [ "$before_sha" != "0000000000000000000000000000000000000000" ]; then
+            git diff --name-status "$before_sha" "$current_sha" > "$WORKFLOW_SUMMARY_DIR/push-changes.txt"
+          else
+            git show --name-status --format="" "$current_sha" > "$WORKFLOW_SUMMARY_DIR/push-changes.txt"
+          fi
 
       - name: Setup Ruby
+        id: setup_ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
           bundler-cache: true
 
       - name: Build site
-        run: bundle exec jekyll build
+        id: build_site
+        if: steps.setup_ruby.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          bundle exec jekyll build 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/build-site.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Write workflow summary
+        if: always()
+        run: node .github/scripts/writeWorkflowSummary.mjs
+        env:
+          WORKFLOW_MODE: push
+          CHANGESET_PATH: ${{ runner.temp }}/pages-summary/push-changes.txt
+          CHANGESET_FORMAT: name-status
+          SETUP_RUBY_CONCLUSION: ${{ steps.setup_ruby.conclusion }}
+          BUILD_SITE_EXIT_CODE: ${{ steps.build_site.outputs.exit_code }}
 
       - name: Upload artifact
+        if: steps.build_site.outputs.exit_code == '0'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./_site
+
+      - name: Fail workflow if build failed
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.setup_ruby.conclusion }}" = "failure" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.build_site.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
 
   deploy:
     needs: build
@@ -47,3 +98,11 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Deployment complete
+        run: |
+          {
+            echo "## Deployment"
+            echo ""
+            echo "- URL: ${{ steps.deployment.outputs.page_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

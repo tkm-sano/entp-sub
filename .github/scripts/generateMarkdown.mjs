@@ -1,6 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 
+const jobsDir = '../../_jobs';
+const summaryDir = process.env.WORKFLOW_SUMMARY_DIR;
+
+function writeSummary(filename, payload) {
+  if (!summaryDir) {
+    return;
+  }
+
+  fs.mkdirSync(summaryDir, { recursive: true });
+  fs.writeFileSync(path.join(summaryDir, filename), JSON.stringify(payload, null, 2), 'utf-8');
+}
+
 // jobs.json を読み込み
 let jobs;
 try {
@@ -10,11 +22,14 @@ try {
   }
   console.log(`jobs.json を読み込みました（${jobs.length} 件）`);
 } catch (error) {
+  writeSummary('generate-summary.json', {
+    status: 'error',
+    jobsDir: '../../_jobs',
+    errorMessage: error.message,
+  });
   console.error('Error: jobs.json の読み込みに失敗しました:', error.message);
   process.exit(1);
 }
-
-const jobsDir = '../../_jobs';
 
 function slugify(value) {
   return String(value || '')
@@ -72,6 +87,15 @@ if (fs.existsSync(jobsDir)) {
 
 let generatedCount = 0;
 let skippedCount = 0;
+const summary = {
+  status: 'started',
+  jobsDir,
+  totalJobs: Array.isArray(jobs) ? jobs.length : 0,
+  generatedCount: 0,
+  skippedCount: 0,
+  generatedFiles: [],
+  skippedJobs: [],
+};
 
 jobs.forEach((job, index) => {
   // 案件タイトルを取得（英語か日本語の列名を試す）
@@ -79,6 +103,10 @@ jobs.forEach((job, index) => {
   if (!title) {
     console.warn(`Warning: 行 ${index + 2} - 案件名が空のためスキップしました`);
     skippedCount++;
+    summary.skippedJobs.push({
+      rowNumber: index + 2,
+      reason: '案件名が空のためスキップしました',
+    });
     return;
   }
 
@@ -138,9 +166,16 @@ ${detailHtmlValue}
   try {
     fs.writeFileSync(path.join(jobsDir, `${filename}.md`), content, 'utf-8');
     generatedCount++;
+    summary.generatedFiles.push(`${filename}.md`);
   } catch (error) {
     console.error(`Error: ${filename}.md の作成に失敗しました:`, error.message);
     skippedCount++;
+    summary.skippedJobs.push({
+      rowNumber,
+      jobId,
+      title,
+      reason: `${filename}.md の作成に失敗しました: ${error.message}`,
+    });
   }
 });
 
@@ -148,3 +183,8 @@ console.log(`_jobs に ${generatedCount} 件の Markdown を生成しました`)
 if (skippedCount > 0) {
   console.warn(`${skippedCount} 件の求人をスキップしました`);
 }
+
+summary.status = 'success';
+summary.generatedCount = generatedCount;
+summary.skippedCount = skippedCount;
+writeSummary('generate-summary.json', summary);

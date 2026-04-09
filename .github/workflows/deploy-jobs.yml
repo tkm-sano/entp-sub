@@ -1,7 +1,7 @@
 name: Deploy Jobs to GitHub Pages
 
 on:
-  workflow_dispatch:   # 手動実行
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,93 +11,213 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WORKFLOW_SUMMARY_DIR: ${{ runner.temp }}/job-sync-summary
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare summary directory
+        run: mkdir -p "$WORKFLOW_SUMMARY_DIR"
+
       - name: Verify environment
+        id: verify_env
+        continue-on-error: true
+        shell: bash
         run: |
-          echo "ワークフローの実行環境を確認しています..."
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          if [ -z "${{ secrets.SHEET_ID }}" ]; then
-            echo "Error: SHEET_ID が設定されていません"
-            exit 1
-          fi
-          if [ -z "${{ secrets.SERVICE_ACCOUNT_KEY }}" ]; then
-            echo "Error: SERVICE_ACCOUNT_KEY が設定されていません"
-            exit 1
-          fi
-          echo "環境変数の確認が完了しました"
+          set +e
+          {
+            echo "ワークフローの実行環境を確認しています..."
+            echo "Branch: ${{ github.ref_name }}"
+            echo "Commit: ${{ github.sha }}"
+            if [ -z "${{ secrets.SHEET_ID }}" ]; then
+              echo "Error: SHEET_ID が設定されていません"
+              exit 1
+            fi
+            if [ -z "${{ secrets.SERVICE_ACCOUNT_KEY }}" ]; then
+              echo "Error: SERVICE_ACCOUNT_KEY が設定されていません"
+              exit 1
+            fi
+            echo "環境変数の確認が完了しました"
+          } 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/verify-env.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        id: setup_node
+        if: steps.verify_env.outputs.exit_code == '0'
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
 
       - name: Write service account key
+        id: write_key
+        if: steps.verify_env.outputs.exit_code == '0' && steps.setup_node.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
         run: |
-          echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
-          echo "サービスアカウントキーを作成しました"
+          set +e
+          {
+            echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
+            echo "サービスアカウントキーを作成しました"
+          } 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/write-key.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Install dependencies
-        run: npm install
+        id: install_deps
+        if: steps.write_key.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
         working-directory: .github/scripts
+        run: |
+          set +e
+          npm install 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/install-deps.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Create _data directory
+        if: steps.install_deps.outputs.exit_code == '0'
         run: mkdir -p _data
 
       - name: Fetch Jobs from Google Sheets
-        run: |
-          node fetchJobs.mjs
-          echo "取得した求人データ:"
-          cat ../../_data/jobs.json | head -20
+        id: fetch_jobs
+        if: steps.install_deps.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
         working-directory: .github/scripts
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: |
+          set +e
+          node fetchJobs.mjs 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/fetch-jobs.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Generate Markdown
-        run: |
-          node generateMarkdown.mjs
-          echo "生成されたMarkdownファイル:"
-          ls -la ../../_jobs/
+        id: generate_markdown
+        if: steps.fetch_jobs.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
         working-directory: .github/scripts
-      
-      - name: Verify generated files
         run: |
-          if [ ! -f "_data/jobs.json" ]; then
-            echo "Error: jobs.json が生成されていません"
-            exit 1
-          fi
-          JOB_COUNT=$(find _jobs -name "*.md" -type f | wc -l)
-          echo "生成されたジョブファイル数: $JOB_COUNT"
-          if [ "$JOB_COUNT" -eq 0 ]; then
-            echo "Warning: ジョブファイルが生成されていません"
-          fi
+          set +e
+          node generateMarkdown.mjs 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/generate-markdown.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Capture content changes
+        if: steps.generate_markdown.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          git status --short --untracked-files=all -- _data/jobs.json _jobs > "$WORKFLOW_SUMMARY_DIR/content-status.txt"
+
+      - name: Verify generated files
+        id: verify_files
+        if: steps.generate_markdown.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          {
+            if [ ! -f "_data/jobs.json" ]; then
+              echo "Error: jobs.json が生成されていません"
+              exit 1
+            fi
+            JOB_COUNT=$(find _jobs -name "*.md" -type f | wc -l)
+            echo "生成されたジョブファイル数: $JOB_COUNT"
+            if [ "$JOB_COUNT" -eq 0 ]; then
+              echo "Warning: ジョブファイルが生成されていません"
+            fi
+          } 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/verify-files.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Setup Ruby
+        id: setup_ruby
+        if: steps.verify_files.outputs.exit_code == '0'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
           bundler-cache: true
 
       - name: Build Jekyll site
+        id: build_site
+        if: steps.verify_files.outputs.exit_code == '0' && steps.setup_ruby.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
         run: |
-          bundle exec jekyll build
-          echo "Jekyll ビルドが完了しました"
-          echo "生成されたページ:"
-          ls -la _site/jobs/ || echo "jobs ディレクトリが見つかりません"
+          set +e
+          bundle exec jekyll build 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/build-site.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Clean up sensitive files
-        run: |
-          rm -f .github/scripts/service-account.json
-          echo "サービスアカウントキーを削除しました"
+        if: always()
+        run: rm -f .github/scripts/service-account.json
+
+      - name: Write workflow summary
+        if: always()
+        run: node .github/scripts/writeWorkflowSummary.mjs
+        env:
+          WORKFLOW_MODE: spreadsheet
+          CHANGESET_PATH: ${{ runner.temp }}/job-sync-summary/content-status.txt
+          CHANGESET_FORMAT: status
+          VERIFY_ENV_EXIT_CODE: ${{ steps.verify_env.outputs.exit_code }}
+          SETUP_NODE_CONCLUSION: ${{ steps.setup_node.conclusion }}
+          WRITE_KEY_EXIT_CODE: ${{ steps.write_key.outputs.exit_code }}
+          INSTALL_DEPS_EXIT_CODE: ${{ steps.install_deps.outputs.exit_code }}
+          FETCH_JOBS_EXIT_CODE: ${{ steps.fetch_jobs.outputs.exit_code }}
+          GENERATE_MARKDOWN_EXIT_CODE: ${{ steps.generate_markdown.outputs.exit_code }}
+          VERIFY_FILES_EXIT_CODE: ${{ steps.verify_files.outputs.exit_code }}
+          SETUP_RUBY_CONCLUSION: ${{ steps.setup_ruby.conclusion }}
+          BUILD_SITE_EXIT_CODE: ${{ steps.build_site.outputs.exit_code }}
 
       - name: Upload artifact
+        if: steps.build_site.outputs.exit_code == '0'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./_site
+
+      - name: Fail workflow if a build step failed
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.verify_env.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.setup_node.conclusion }}" = "failure" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.write_key.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.install_deps.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.fetch_jobs.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.generate_markdown.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.verify_files.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.setup_ruby.conclusion }}" = "failure" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.build_site.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
 
   deploy:
     needs: build
@@ -105,12 +225,16 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        
+
       - name: Deployment complete
         run: |
-          echo "デプロイが完了しました"
-          echo "サイトURL: ${{ steps.deployment.outputs.page_url }}"
+          {
+            echo "## Deployment"
+            echo ""
+            echo "- URL: ${{ steps.deployment.outputs.page_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
