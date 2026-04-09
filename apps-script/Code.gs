@@ -54,7 +54,7 @@ function onEdit(e) {
     .map(h => String(h).trim());
 
   const jobIdCol = findColumn_(headers, "job_id", "id");
-  const titleCol = findColumn_(headers, "案件名", "title", "案件タイトル");
+  const titleCol = findColumn_(headers, "案件名", "商品名", "title", "案件タイトル");
 
   if (jobIdCol < 0 || titleCol < 0) {
     return;
@@ -462,7 +462,7 @@ function listJobs_(params) {
   const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
   const jobIdCol        = findColumn("job_id", "id");
-  const titleCol        = findColumn("案件名", "title", "案件タイトル");
+  const titleCol        = findColumn("案件名", "商品名", "title", "案件タイトル");
   const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
   const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
   const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
@@ -472,10 +472,10 @@ function listJobs_(params) {
   const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
   const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
   const conceptCol      = findColumn("コンセプト", "concept");
-  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
+  const makeupCol       = findColumn("メイク・ヘアメイク", "メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
   const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
   const mediaCol        = findColumn("媒体", "media", "media_usage");
-  const periodCol       = findColumn("使用期間", "period", "usage_period");
+  const periodCol       = findColumn("使用期間", "試用期間", "period", "usage_period");
   const competitionCol  = findColumn("競合", "competition", "competition_presence");
   const remainingCol    = findColumn("残り日数");
   const selectionCol    = findColumn("選考方法", "selection_method");
@@ -531,7 +531,7 @@ function getJob_(params) {
 function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
   const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
-  const titleCol        = findColumn("案件名", "title", "案件タイトル");
+  const titleCol        = findColumn("案件名", "商品名", "title", "案件タイトル");
   const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
   const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
   const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
@@ -541,10 +541,11 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
   const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
   const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
   const conceptCol      = findColumn("コンセプト", "concept");
-  const makeupCol       = findColumn("メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
+  const makeupCol       = findColumn("メイク・ヘアメイク", "メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
   const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
   const mediaCol        = findColumn("媒体", "media", "media_usage");
-  const periodCol       = findColumn("使用期間", "period", "usage_period");
+  const periodCol       = findColumn("使用期間", "試用期間", "period", "usage_period");
+  const productCol      = findColumn("商品名", "product_name", "product");
   const competitionCol  = findColumn("競合", "competition", "competition_presence");
   const remainingCol    = findColumn("残り日数");
   const selectionCol    = findColumn("選考方法", "selection_method");
@@ -566,6 +567,7 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
     id: generatedId,
     job_id: generatedId,
     title: colDisplay_(displayRow, titleCol, ""),
+    product_name: colDisplay_(displayRow, productCol, ""),
     reward: colDisplay_(displayRow, rewardCol, ""),
     duration: colDisplay_(displayRow, durationCol, ""),
     hourly_wage: colDisplay_(displayRow, hourlyWageCol, ""),
@@ -611,7 +613,7 @@ function fillMissingJobIds() {
     .map(h => String(h).trim());
 
   const jobIdCol = findColumn_(headers, "job_id", "id");
-  const titleCol = findColumn_(headers, "案件名", "title", "案件タイトル");
+  const titleCol = findColumn_(headers, "案件名", "商品名", "title", "案件タイトル");
 
   if (jobIdCol < 0) {
     throw apiError_("config_error", "job_id 列が見つかりません");
@@ -716,7 +718,7 @@ function apply_(params) {
     const headers = values[0].map(h => String(h).trim());
     const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
-    const titleCol      = findColumn("案件名", "title");
+    const titleCol      = findColumn("案件名", "商品名", "title");
     const deadlineCol   = findColumn("締切日", "deadline", "締切");
     const maxCol        = findColumn("募集人数", "max_applicants");
     const countCol      = findColumn("applicant_count");
@@ -822,7 +824,7 @@ function notifyDeadlinePassed() {
   const headers = values[0].map(h => String(h).trim());
   const findColumn = (...candidates) => findColumn_(headers, ...candidates);
 
-  const titleCol      = findColumn("案件名", "title");
+  const titleCol      = findColumn("案件名", "商品名", "title");
   const deadlineCol   = findColumn("締切日", "deadline", "締切");
   const emailCol      = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
   const applicantsCol = findColumn("applicants", "応募者", "応募者名");

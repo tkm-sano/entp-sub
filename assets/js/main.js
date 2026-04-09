@@ -121,14 +121,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function parseDeadlineDate(deadline) {
+    if (!deadline) return null;
+
+    const raw = String(deadline).trim();
+    if (!raw || /^残り\s*\d+\s*日$/.test(raw) || /^\d+\s*日$/.test(raw)) {
+      return null;
+    }
+
+    const jpMatch = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (jpMatch) {
+      return new Date(Number(jpMatch[1]), Number(jpMatch[2]) - 1, Number(jpMatch[3]));
+    }
+
+    const ymdMatch = raw.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$/);
+    if (ymdMatch) {
+      return new Date(Number(ymdMatch[1]), Number(ymdMatch[2]) - 1, Number(ymdMatch[3]));
+    }
+
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
     const raw = String(deadline).trim();
     if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
     if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
     const today = new Date();
-    const d = new Date(deadline);
-    if (isNaN(d.getTime())) return "未定";
+    const d = parseDeadlineDate(deadline);
+    if (!d || isNaN(d.getTime())) return "未定";
 
     const diffMs = d.setHours(0,0,0,0) - today.setHours(0,0,0,0);
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -262,8 +284,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
 
       if (job.deadline) {
-        const deadlineDate = new Date(job.deadline);
-        if (!Number.isNaN(deadlineDate.getTime())) {
+        const deadlineDate = parseDeadlineDate(job.deadline);
+        if (deadlineDate && !Number.isNaN(deadlineDate.getTime())) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           deadlineDate.setHours(0, 0, 0, 0);
@@ -302,7 +324,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     jobEls.jobsList.innerHTML = visible.map(job => {
-      const remainingDays = job.deadline ? calculateRemainingDays(job.deadline) : "未定";
+      const remainingSource = pickFirst(job.remaining, job["残り日数"], job.deadline);
+      const remainingDays = calculateRemainingDays(remainingSource);
       const capacityRaw = Number(job.max_applicants ?? job.maxApplicants);
       const currentRaw = Number(job.applicant_count ?? job.applicantCount);
       const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
