@@ -1,9 +1,9 @@
 lang: ja
 timezone: Asia/Tokyo
+url: "https://job-list.missconnect.jp"
 markdown: kramdown
 permalink: pretty
-# GitHub Pages用の設定を追加
-baseurl: "/entp-sub"
+baseurl: ""
 collections:
   jobs:
     output: true

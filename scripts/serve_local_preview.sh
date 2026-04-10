@@ -20,6 +20,6 @@ if [ -z "$PORT" ]; then
   exit 1
 fi
 
-echo "Starting local preview on http://${HOST}:${PORT}/entp-sub/"
+echo "Starting local preview on http://${HOST}:${PORT}/"
 
 exec bundle exec jekyll serve --host "$HOST" --port "$PORT"
