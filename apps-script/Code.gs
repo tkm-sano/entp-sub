@@ -20,8 +20,9 @@ const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
 const JOB_ID_HEADER = "案件ID";
-const JOB_ID_PREFIX = "job_";
-const JOB_ID_SEQUENCE_WIDTH = 3;
+const JOB_ID_PREFIX = "job-";
+const JOB_ID_FALLBACK_PREFIX = "job_tmp_";
+const JOB_ID_SEQUENCE_WIDTH = 4;
 const DEFAULT_JOB_PUBLIC_BASE_URL = "https://job-list.missconnect.jp/jobs";
 const HEADER_ROW = 1;
 const APPLICANT_LIST_HEADERS = [
@@ -707,7 +708,7 @@ function prepareJobRowForPublish_(sheet, rowNumber, cachedJobIdCol) {
   }
 
   if (!jobId) {
-    jobId = generateNextJobId_(sheet, jobIdCol, resolveJobBaseDate_(row, columns));
+    jobId = generateNextJobId_(sheet, jobIdCol);
     idCell.setValue(jobId);
   }
 
@@ -1428,14 +1429,7 @@ function ensureJobIdColumn_(sheet) {
   return nextCol;
 }
 
-function resolveJobBaseDate_(row, columns) {
-  const timestampValue = columns.timestamp >= 0 ? row[columns.timestamp] : "";
-  return parseDate_(timestampValue) || new Date();
-}
-
-function generateNextJobId_(sheet, jobIdCol, baseDate) {
-  const datePart = Utilities.formatDate(baseDate, TZ, "yyyyMMdd");
-  const prefix = `${JOB_ID_PREFIX}${datePart}_`;
+function generateNextJobId_(sheet, jobIdCol) {
   const lastRow = sheet.getLastRow();
   const existingValues = lastRow > HEADER_ROW
     ? sheet.getRange(HEADER_ROW + 1, jobIdCol, lastRow - HEADER_ROW, 1).getDisplayValues().flat()
@@ -1444,17 +1438,28 @@ function generateNextJobId_(sheet, jobIdCol, baseDate) {
 
   existingValues.forEach((value) => {
     const text = String(value || "").trim();
-    if (!text.startsWith(prefix)) {
+    const match = text.match(/^job-(\d+)$/i);
+    if (match) {
+      const sequence = Number(match[1]);
+      if (Number.isFinite(sequence)) {
+        maxSequence = Math.max(maxSequence, sequence);
+      }
       return;
     }
-    const sequence = Number(text.slice(prefix.length));
-    if (Number.isFinite(sequence)) {
-      maxSequence = Math.max(maxSequence, sequence);
+
+    const legacyMatch = text.match(/^job_(?:\d{8}_)?(\d+)$/i);
+    if (!legacyMatch) {
+      return;
+    }
+
+    const legacySequence = Number(legacyMatch[1]);
+    if (Number.isFinite(legacySequence)) {
+      maxSequence = Math.max(maxSequence, legacySequence);
     }
   });
 
   const nextSequence = String(maxSequence + 1).padStart(JOB_ID_SEQUENCE_WIDTH, "0");
-  return `${prefix}${nextSequence}`;
+  return `${JOB_ID_PREFIX}${nextSequence}`;
 }
 
 function buildJobPageUrl_(jobId) {
@@ -1592,7 +1597,9 @@ function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
     .filter(Boolean)
     .join("|");
 
-  return identitySource ? `${JOB_ID_PREFIX}${hash_(identitySource).slice(0, 12)}` : `job_${sheetRowNumber}`;
+  return identitySource
+    ? `${JOB_ID_FALLBACK_PREFIX}${hash_(identitySource).slice(0, 12)}`
+    : `${JOB_ID_FALLBACK_PREFIX}${sheetRowNumber}`;
 }
 
 function findJobRowIndex_(values, headers, jobId, displayValues, applicantStore) {
