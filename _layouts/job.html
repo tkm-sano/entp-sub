@@ -35,7 +35,7 @@
               <strong id="job-hero-reward" class="job-highlight-card__value">-</strong>
             </div>
             <div class="job-highlight-card">
-              <span class="job-highlight-card__label">実施日</span>
+              <span class="job-highlight-card__label">撮影候補日</span>
               <strong id="job-hero-date" class="job-highlight-card__value">-</strong>
             </div>
             <div class="job-highlight-card">
@@ -60,12 +60,16 @@
       <section class="job-section-card">
         <div class="job-section-heading">
           <p class="job-section-heading__eyebrow">Overview</p>
-          <h2>募集条件</h2>
+          <h2>案件概要</h2>
         </div>
         <div class="job-detail-list">
+          <div class="job-detail-item"><span class="job-detail-label">商品名</span><span id="job-product-name">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">商品URL</span><a id="job-product-url" href="#" target="_blank" rel="noreferrer noopener">-</a></div>
           <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">時給</span><span id="job-hourly-wage">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">想定時給</span><span id="job-hourly-wage">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">撮影候補日</span><span id="job-shoot-dates" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">-</span></div>
         </div>
       </section>
 
@@ -76,8 +80,8 @@
         </div>
         <div class="job-detail-list">
           <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">コンセプト</span><span id="job-concept" class="job-applicants-list">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">撮影形式</span><span id="job-shooting-format">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">-</span></div>
         </div>
@@ -86,13 +90,17 @@
       <section class="job-section-card">
         <div class="job-section-heading">
           <p class="job-section-heading__eyebrow">Application</p>
-          <h2>応募条件</h2>
+          <h2>応募・準備情報</h2>
         </div>
         <div class="job-detail-list">
           <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクの有無</span><span id="job-makeup-support">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイク</span><span id="job-makeup-support">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクのイメージ</span><span id="job-makeup-image" class="job-applicants-list">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">衣装の有無</span><span id="job-outfit-availability">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">衣装</span><span id="job-outfit" class="job-applicants-list">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">-</span></div>
           <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">-</span></div>
+          <div class="job-detail-item"><span class="job-detail-label">緊急連絡先</span><span id="job-emergency-contact" class="job-applicants-list">-</span></div>
         </div>
       </section>
 
@@ -211,6 +219,21 @@
         if (!el) return;
         const text = value === undefined || value === null ? "" : String(value).trim();
         el.textContent = text || fallback;
+      }
+
+      function setLinkOrFallback(id, value, fallback) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const text = value === undefined || value === null ? "" : String(value).trim();
+        if (!text) {
+          el.textContent = fallback;
+          el.removeAttribute("href");
+          return;
+        }
+
+        el.textContent = text;
+        el.href = text;
       }
 
       function escapeHtml(text) {
@@ -370,30 +393,40 @@
 
       function renderJob(job) {
         // 報酬総額
-        const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job["報酬"]);
+        const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job.reward_amount, job["報酬"]);
         const totalRewardNumber = Number(totalRewardValue);
         const totalReward = Number.isFinite(totalRewardNumber)
           ? `${totalRewardNumber.toLocaleString()}円（交通費込）`
           : (totalRewardValue || "-");
         
-        // 拘束時間（分離）
-        const duration = pickFirst(job.duration, job["拘束時間"], job["拘束時間(時間)"]);
+        const productName = pickFirst(job.product_name, job.productName, job["商品名（サービス名、ブランド名等）"], job["商品名"]);
+        const productUrl = pickFirst(job.product_url, job.productUrl, job["商品URL（サービスの場合はHP等）"], job["商品URL"]);
+        const duration = pickFirst(job.duration, job.duration_minutes, job["拘束時間（分単位）※数字のみ"], job["拘束時間"], job["拘束時間(時間)"]);
         
-        // 時給（分離）
+        // 時給（計算値含む）
         const hourlyWageValue = pickFirst(job.hourly_wage, job.hourlyWage, job.wage, job["時給"]);
         const hourlyWageNumber = Number(hourlyWageValue);
-        const hourlyWage = Number.isFinite(hourlyWageNumber) ? `${hourlyWageNumber.toLocaleString()}円/時` : hourlyWageValue;
+        const hourlyWage = Number.isFinite(hourlyWageNumber) && hourlyWageNumber > 0
+          ? `${hourlyWageNumber.toLocaleString()}円/時`
+          : (hourlyWageValue || "-");
         
-        // 実施日時
+        // 撮影候補日
         const implementationDateRaw = pickFirst(
+          Array.isArray(job.shoot_dates) ? job.shoot_dates.join(" / ") : "",
+          job.candidate_shoot_dates,
           job.implementation_date,
           job.execution_date,
           job.date,
           job.schedule,
+          job["撮影候補日①"],
+          job["撮影候補日②"],
+          job["撮影候補日③"],
+          job["撮影候補日④"],
+          job["撮影候補日⑤"],
           job["実施日時"],
           job["日時"]
         );
-        const implementationDate = formatImplementationDate(implementationDateRaw);
+        const implementationDate = implementationDateRaw || "-";
         
         // 実施場所
         const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);
@@ -419,23 +452,29 @@
         // 案件説明
         const description = pickFirst(job.description, job.details, job.shooting_content, job["案件説明"]);
         
-        // コンセプト
-        const concept = pickFirst(job.concept, job.concept_line, job["コンセプト"]);
-        
         // メイク・ヘアメイク
         const makeupSupport = pickFirst(
+          job.makeup,
           job.makeup_staff,
           job.hair_makeup_staff,
           job.make_hair_makeup,
+          job["メイク・ヘアメイク"],
           job["メイク・ヘアメイクの有無"],
           job["メイク・ヘアメイクスタッフの有無"]
         );
+
+        const makeupImage = pickFirst(job.makeup_image, job.makeupImage, job.concept, job.concept_line, job["メイク・ヘアメイクのイメージ"], job["コンセプト"]);
+
+        const outfitAvailability = pickFirst(job.outfit_availability, job.outfitAvailability, job["衣装の有無"]);
+        const outfit = pickFirst(job.outfit, job.wardrobe, job["衣装"]);
         
         // 持ち物
-        const belongings = pickFirst(job.belongings, job["持ち物"]);
+        const belongings = pickFirst(job.belongings, job["その他持ち物"], job["持ち物"]);
         
         // 媒体
         const media = pickFirst(job.media, job.medium, job["媒体"]);
+
+        const shootingFormat = pickFirst(job.shooting_format, job.shootingFormat, job["撮影形式"]);
         
         // 使用期間
         const usagePeriod = pickFirst(job.usage_period, job.period, job["使用期間"]);
@@ -449,6 +488,8 @@
         
         // 選考方法
         const selectionMethod = pickFirst(job.selection_method, job.selection_process, job.method, job["選考方法"]);
+
+        const emergencyContact = pickFirst(job.emergency_contact, job.emergencyContact, job["撮影当日の緊急連絡先"]);
         
         // サムネイル（画像/動画のどちらでも表示）
         const mediaSource = resolveThumbnailMediaSource(job);
@@ -456,8 +497,8 @@
 
         // メタセクション表示
         const resolvedTitle = pickFirst(job.title, job.name, job.job_title, "案件詳細");
-        const category = pickFirst(job.category, job["カテゴリ"], media);
-        const heroSummary = pickFirst(concept, description, requirements, "条件と募集内容を確認してください。");
+        const category = pickFirst(job.category, job["カテゴリ"], media, shootingFormat);
+        const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "Casting Opportunity");
         setTextOrFallback("job-hero-summary", heroSummary, "条件と募集内容を確認してください。");
@@ -468,22 +509,26 @@
         document.title = `${resolvedTitle} | 案件詳細`;
 
         // 詳細セクション表示
-        setTextOrFallback("job-total-reward", totalReward, "-");
+        setTextOrFallback("job-product-name", productName, "-");
+        setLinkOrFallback("job-product-url", productUrl, "-");
         setTextOrFallback("job-duration", duration, "-");
         setTextOrFallback("job-hourly-wage", hourlyWage, "-");
-        setTextOrFallback("job-implementation-date", implementationDate, "-");
+        setTextOrFallback("job-shoot-dates", implementationDate, "-");
         setTextOrFallback("job-location", location, "-");
         setTextOrFallback("job-requirements", requirements, "-");
         setTextOrFallback("job-recruitment-number", recruitmentNumber, "-");
         setTextOrFallback("job-description", description, "-");
-        setTextOrFallback("job-concept", concept, "-");
+        setTextOrFallback("job-shooting-format", shootingFormat, "-");
         setTextOrFallback("job-makeup-support", makeupSupport, "-");
+        setTextOrFallback("job-makeup-image", makeupImage, "-");
+        setTextOrFallback("job-outfit-availability", outfitAvailability, "-");
+        setTextOrFallback("job-outfit", outfit, "-");
         setTextOrFallback("job-belongings", belongings, "-");
         setTextOrFallback("job-media", media, "-");
         setTextOrFallback("job-usage-period", usagePeriod, "-");
         setTextOrFallback("job-competition", competition, "-");
-        setText("job-remaining-days", remainingDays);
         setTextOrFallback("job-selection-method", selectionMethod, "-");
+        setTextOrFallback("job-emergency-contact", emergencyContact, "-");
 
         if (thumbnailEl) {
           const titleEscaped = escapeHtml(String(job.title || "案件サムネイル"));

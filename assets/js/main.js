@@ -330,15 +330,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const currentRaw = Number(job.applicant_count ?? job.applicantCount);
       const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
       const current = Number.isFinite(currentRaw) ? `${currentRaw}人` : "0人";
-      const category = escapeHtml(String(job.category || job.media || "Casting").trim());
+      const category = escapeHtml(String(job.category || job.media || job.shooting_format || "Casting").trim());
       const rawJobId = String(job.job_id || job.id || "").trim();
       const encodedJobId = encodeURIComponent(rawJobId);
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
       const hourlyWage = Number.isFinite(Number(job.hourly_wage ?? job.hourlyWage))
         ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
         : "未設定";
-      const fee = job.fee ? escapeHtml(String(job.fee)) : "未設定";
+      const feeValue = job.fee ?? job.reward ?? job.reward_amount;
+      const feeNumber = Number(feeValue);
+      const fee = Number.isFinite(feeNumber) && feeNumber > 0
+        ? `${feeNumber.toLocaleString()}円（交通費込）`
+        : (feeValue ? escapeHtml(String(feeValue)) : "未設定");
       const eyeCatchHtml = renderCardMedia(job);
+      const title = escapeHtml(String(job.title || job.name || "案件詳細"));
 
       // 「詳細ページ」リンクボタンに変更
       return `
@@ -350,7 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span class="job-card__category">${category}</span>
                 <span class="job-card__remaining">${escapeHtml(remainingDays)}</span>
               </div>
-              <h3 class="job-card__title">${escapeHtml(String(job.title || ""))}</h3>
+              <h3 class="job-card__title">${title}</h3>
             </div>
             <div class="job-card__body">
               <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">時給</span><span class="job-card__meta-value">${escapeHtml(hourlyWage)}</span></p>

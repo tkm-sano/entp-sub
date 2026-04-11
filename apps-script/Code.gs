@@ -5,10 +5,11 @@
 ========================================= */
 
 const SHEET_NAMES = {
-  jobs: "jobs"
+  jobs: "案件",
+  applicants: "応募者リスト"
 };
 
-const API_BUILD = "2026-03-29-1";
+const API_BUILD = "2026-04-11-1";
 const GITHUB_API_BASE = "https://api.github.com";
 const TZ = "Asia/Tokyo";
 const TALENT_USERS_CACHE_KEY = "talent_users_v2";
@@ -19,8 +20,29 @@ const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
 const JOB_ID_PREFIX = "job_";
-const JOB_ID_DIGITS = 3;
 const HEADER_ROW = 1;
+const APPLICANT_LIST_HEADERS = [
+  "job_id",
+  "source_key",
+  "案件名",
+  "applicant_count",
+  "applicants",
+  "応募者メールアドレス",
+  "キャンセルポリシー確認済み",
+  "キャンセルポリシー確認日時",
+  "応募日時",
+  "deadline_notified_at",
+  "updated_at"
+];
+const LEGACY_APPLICANT_LIST_HEADERS = [
+  "job_id",
+  "source_key",
+  "案件名",
+  "applicant_count",
+  "applicants",
+  "deadline_notified_at",
+  "updated_at"
+];
 
 /* =========================================
    Spreadsheet Menu
@@ -29,7 +51,7 @@ const HEADER_ROW = 1;
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("更新")
-    .addItem("空の job_id を採番", "fillMissingJobIds")
+    .addItem("応募者リストを同期", "syncApplicantListSheet_")
     .addItem("編集をWebページに反映", "runGitHubActionsFromMenu_")
     .addToUi();
 }
@@ -48,23 +70,7 @@ function onEdit(e) {
     return;
   }
 
-  const headers = sheet
-    .getRange(HEADER_ROW, 1, 1, sheet.getLastColumn())
-    .getValues()[0]
-    .map(h => String(h).trim());
-
-  const jobIdCol = findColumn_(headers, "job_id", "id");
-  const titleCol = findColumn_(headers, "案件名", "商品名", "title", "案件タイトル");
-
-  if (jobIdCol < 0 || titleCol < 0) {
-    return;
-  }
-
-  if (e.range.getColumn() !== titleCol + 1) {
-    return;
-  }
-
-  assignJobIdIfNeeded_(sheet, e.range.getRow(), jobIdCol, titleCol);
+  syncApplicantListRow_(sheet, e.range.getRow());
 }
 
 function runGitHubActionsFromMenu_() {
@@ -459,41 +465,16 @@ function listJobs_(params) {
   }
 
   const headers = values[0].map(h => String(h).trim());
-  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
+  const columns = getJobColumns_(headers);
+  const applicantStore = getApplicantListStore_();
 
-  const jobIdCol        = findColumn("job_id", "id");
-  const titleCol        = findColumn("案件名", "商品名", "title", "案件タイトル");
-  const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
-  const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
-  const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
-  const dateCol         = findColumn("実施日時", "date", "candidate_shoot_dates");
-  const locationCol     = findColumn("実施場所", "location", "shoot_location");
-  const requirementsCol = findColumn("応募条件", "requirements");
-  const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
-  const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
-  const conceptCol      = findColumn("コンセプト", "concept");
-  const makeupCol       = findColumn("メイク・ヘアメイク", "メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
-  const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
-  const mediaCol        = findColumn("媒体", "media", "media_usage");
-  const periodCol       = findColumn("使用期間", "試用期間", "period", "usage_period");
-  const competitionCol  = findColumn("競合", "competition", "competition_presence");
-  const remainingCol    = findColumn("残り日数");
-  const selectionCol    = findColumn("選考方法", "selection_method");
-  const deadlineCol     = findColumn("締切日", "deadline", "締切");
-  const emailCol        = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
-  const formCol         = findColumn("form_url");
-  const categoryCol     = findColumn("category");
-  const countCol        = findColumn("applicant_count");
-  const notifiedCol     = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
-  const applicantsCol   = findColumn("applicants", "応募者", "応募者名");
-
-  if (titleCol < 0) {
+  if (columns.title < 0) {
     throw apiError_("config_error", "案件名列が見つかりません");
   }
 
   const jobs = values.slice(1).map((row, i) => {
     const displayRow = displayValues[i + 1] || [];
-    return buildJobFromRow_(row, displayRow, headers, i + 2);
+    return buildJobFromRow_(row, displayRow, headers, i + 2, columns, applicantStore);
   });
 
   return { ok: true, jobs };
@@ -515,7 +496,8 @@ function getJob_(params) {
   }
 
   const headers = values[0].map(h => String(h).trim());
-  const rowIndex = findJobRowIndex_(values, headers, jobId);
+  const applicantStore = getApplicantListStore_();
+  const rowIndex = findJobRowIndex_(values, headers, jobId, displayValues, applicantStore);
 
   if (rowIndex < 1) {
     throw apiError_("not_found", "案件が見つかりません");
@@ -523,74 +505,83 @@ function getJob_(params) {
 
   const row = values[rowIndex];
   const displayRow = displayValues[rowIndex] || [];
-  const job = buildJobFromRow_(row, displayRow, headers, rowIndex + 1);
+  const columns = getJobColumns_(headers);
+  const job = buildJobFromRow_(row, displayRow, headers, rowIndex + 1, columns, applicantStore);
 
   return { ok: true, job };
 }
 
-function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
-  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
-
-  const titleCol        = findColumn("案件名", "商品名", "title", "案件タイトル");
-  const rewardCol       = findColumn("報酬（交通費込）", "報酬", "fee");
-  const durationCol     = findColumn("拘束時間", "duration", "duration_hours");
-  const hourlyWageCol   = findColumn("時給", "hourly_wage", "wage");
-  const dateCol         = findColumn("実施日時", "date", "candidate_shoot_dates");
-  const locationCol     = findColumn("実施場所", "location", "shoot_location");
-  const requirementsCol = findColumn("応募条件", "requirements");
-  const maxCol          = findColumn("募集人数", "max_applicants", "recruitment_number");
-  const descriptionCol  = findColumn("案件説明", "description", "shoot_description", "shooting_content");
-  const conceptCol      = findColumn("コンセプト", "concept");
-  const makeupCol       = findColumn("メイク・ヘアメイク", "メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup");
-  const belongingsCol   = findColumn("持ち物", "belongings", "items_to_bring");
-  const mediaCol        = findColumn("媒体", "media", "media_usage");
-  const periodCol       = findColumn("使用期間", "試用期間", "period", "usage_period");
-  const productCol      = findColumn("商品名", "product_name", "product");
-  const competitionCol  = findColumn("競合", "competition", "competition_presence");
-  const remainingCol    = findColumn("残り日数");
-  const selectionCol    = findColumn("選考方法", "selection_method");
-  const deadlineCol     = findColumn("締切日", "deadline", "締切");
-  const emailCol        = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
-  const formCol         = findColumn("form_url");
-  const categoryCol     = findColumn("category");
-  const countCol        = findColumn("applicant_count");
-  const notifiedCol     = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
-  const applicantsCol   = findColumn("applicants", "応募者", "応募者名");
-
+function buildJobFromRow_(row, displayRow, headers, sheetRowNumber, columns, applicantStore) {
+  const resolvedColumns = columns || getJobColumns_(headers);
   const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
-  const deadlineText = colDisplay_(displayRow, deadlineCol, "");
-  const remainingText = colDisplay_(displayRow, remainingCol, "");
-  const computedRemaining = calculateRemainingDaysLabel_(colValue_(row, deadlineCol, ""));
+  const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, resolvedColumns);
+  const applicantRecord = applicantStore
+    ? getApplicantRecordForJob_(applicantStore, generatedId, sourceKey)
+    : null;
+  const resolvedJobId = applicantRecord?.jobId || generatedId;
+  const deadlineText = colDisplay_(displayRow, resolvedColumns.deadline, "");
+  const remainingText = colDisplay_(displayRow, resolvedColumns.remaining, "");
+  const computedRemaining = calculateRemainingDaysLabel_(colValue_(row, resolvedColumns.deadline, ""));
   const remaining = computedRemaining || remainingText;
+  const shootDates = getShootDatesFromRow_(row, displayRow, resolvedColumns);
+  const shootDateText = shootDates.join(" / ");
+  const rewardRaw = colValue_(row, resolvedColumns.reward, "");
+  const rewardDisplay = formatRewardDisplay_(rewardRaw, colDisplay_(displayRow, resolvedColumns.reward, ""));
+  const durationRaw = colValue_(row, resolvedColumns.duration, "");
+  const durationMinutes = normalizeNumber_(durationRaw);
+  const durationDisplay = formatDurationDisplay_(durationRaw, colDisplay_(displayRow, resolvedColumns.duration, ""));
+  const hourlyWageValue = computeHourlyWage_(rewardRaw, durationRaw);
+  const titleText = colDisplay_(displayRow, resolvedColumns.title, "");
+  const mediaText = colDisplay_(displayRow, resolvedColumns.media, "");
+  const maxApplicants = normalizeNumber_(colValue_(row, resolvedColumns.max, 0));
+  const applicantCount = applicantRecord
+    ? applicantRecord.applicantCount
+    : (resolvedColumns.count >= 0 ? normalizeNumber_(colValue_(row, resolvedColumns.count, 0)) : 0);
+  const applicantText = applicantRecord?.applicantsText || colDisplay_(displayRow, resolvedColumns.applicants, "");
+  const notifiedAt = applicantRecord?.deadlineNotifiedAt || colDisplay_(displayRow, resolvedColumns.notified, "");
 
   return {
-    id: generatedId,
-    job_id: generatedId,
-    title: colDisplay_(displayRow, titleCol, ""),
-    product_name: colDisplay_(displayRow, productCol, ""),
-    reward: colDisplay_(displayRow, rewardCol, ""),
-    duration: colDisplay_(displayRow, durationCol, ""),
-    hourly_wage: colDisplay_(displayRow, hourlyWageCol, ""),
-    date: colDisplay_(displayRow, dateCol, ""),
-    location: colDisplay_(displayRow, locationCol, ""),
-    requirements: colDisplay_(displayRow, requirementsCol, ""),
-    max_applicants: colDisplay_(displayRow, maxCol, ""),
-    description: colDisplay_(displayRow, descriptionCol, ""),
-    concept: colDisplay_(displayRow, conceptCol, ""),
-    makeup: colDisplay_(displayRow, makeupCol, ""),
-    belongings: colDisplay_(displayRow, belongingsCol, ""),
-    media: colDisplay_(displayRow, mediaCol, ""),
-    period: colDisplay_(displayRow, periodCol, ""),
-    competition: colDisplay_(displayRow, competitionCol, ""),
+    id: resolvedJobId,
+    job_id: resolvedJobId,
+    title: titleText,
+    name: titleText,
+    product_name: colDisplay_(displayRow, resolvedColumns.productName, ""),
+    product_url: colDisplay_(displayRow, resolvedColumns.productUrl, ""),
+    reward: rewardDisplay,
+    fee: rewardDisplay,
+    reward_amount: normalizeNumber_(rewardRaw),
+    duration: durationDisplay,
+    duration_minutes: durationMinutes,
+    hourly_wage: hourlyWageValue,
+    date: shootDateText,
+    candidate_shoot_dates: shootDateText,
+    shoot_dates: shootDates,
+    location: colDisplay_(displayRow, resolvedColumns.location, ""),
+    requirements: colDisplay_(displayRow, resolvedColumns.requirements, ""),
+    max_applicants: maxApplicants,
+    recruitment_number: maxApplicants,
+    description: colDisplay_(displayRow, resolvedColumns.description, ""),
+    concept: colDisplay_(displayRow, resolvedColumns.concept, "") || colDisplay_(displayRow, resolvedColumns.makeupImage, ""),
+    makeup: colDisplay_(displayRow, resolvedColumns.makeup, ""),
+    makeup_image: colDisplay_(displayRow, resolvedColumns.makeupImage, ""),
+    belongings: colDisplay_(displayRow, resolvedColumns.belongings, ""),
+    media: mediaText,
+    shooting_format: colDisplay_(displayRow, resolvedColumns.shootingFormat, ""),
+    period: colDisplay_(displayRow, resolvedColumns.period, ""),
+    usage_period: colDisplay_(displayRow, resolvedColumns.period, ""),
+    competition: colDisplay_(displayRow, resolvedColumns.competition, ""),
+    outfit_availability: colDisplay_(displayRow, resolvedColumns.outfitAvailability, ""),
+    outfit: colDisplay_(displayRow, resolvedColumns.outfit, ""),
+    emergency_contact: colDisplay_(displayRow, resolvedColumns.emergencyContact, ""),
     remaining: remaining,
-    selection_method: colDisplay_(displayRow, selectionCol, ""),
+    selection_method: colDisplay_(displayRow, resolvedColumns.selection, ""),
     deadline: deadlineText,
-    client_email: colDisplay_(displayRow, emailCol, ""),
-    form_url: colDisplay_(displayRow, formCol, ""),
-    category: colDisplay_(displayRow, categoryCol, ""),
-    applicant_count: colValue_(row, countCol, 0),
-    deadline_notified_at: colDisplay_(displayRow, notifiedCol, ""),
-    applicants: colDisplay_(displayRow, applicantsCol, "")
+    client_email: colDisplay_(displayRow, resolvedColumns.email, ""),
+    form_url: colDisplay_(displayRow, resolvedColumns.form, ""),
+    category: colDisplay_(displayRow, resolvedColumns.category, "") || mediaText || colDisplay_(displayRow, resolvedColumns.shootingFormat, ""),
+    applicant_count: applicantCount,
+    deadline_notified_at: notifiedAt,
+    applicants: applicantText
   };
 }
 
@@ -598,12 +589,36 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber) {
    job_id 採番
 ========================================= */
 
-function fillMissingJobIds() {
-  const sheet = getJobsSheet_();
-  const lastCol = sheet.getLastColumn();
-  const lastRow = sheet.getLastRow();
+function syncApplicantListSheet_() {
+  const jobsSheet = getJobsSheet_();
+  const range = jobsSheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
 
-  if (lastRow <= HEADER_ROW || lastCol <= 0) {
+  if (values.length < 2) {
+    return;
+  }
+
+  const headers = values[0].map(h => String(h).trim());
+  const columns = getJobColumns_(headers);
+  const applicantStore = getApplicantListStore_();
+
+  for (let i = 1; i < values.length; i++) {
+    syncApplicantListRecord_(values[i], displayValues[i] || [], headers, i + 1, columns, applicantStore);
+  }
+}
+
+function fillMissingJobIds() {
+  syncApplicantListSheet_();
+}
+
+function syncApplicantListRow_(sheet, rowNumber) {
+  if (rowNumber <= HEADER_ROW) {
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  if (lastCol <= 0) {
     return;
   }
 
@@ -611,68 +626,32 @@ function fillMissingJobIds() {
     .getRange(HEADER_ROW, 1, 1, lastCol)
     .getValues()[0]
     .map(h => String(h).trim());
+  const columns = getJobColumns_(headers);
+  const row = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+  const displayRow = sheet.getRange(rowNumber, 1, 1, lastCol).getDisplayValues()[0];
+  const applicantStore = getApplicantListStore_();
 
-  const jobIdCol = findColumn_(headers, "job_id", "id");
-  const titleCol = findColumn_(headers, "案件名", "商品名", "title", "案件タイトル");
-
-  if (jobIdCol < 0) {
-    throw apiError_("config_error", "job_id 列が見つかりません");
-  }
-
-  if (titleCol < 0) {
-    throw apiError_("config_error", "案件名列が見つかりません");
-  }
-
-  for (let row = HEADER_ROW + 1; row <= lastRow; row++) {
-    assignJobIdIfNeeded_(sheet, row, jobIdCol, titleCol);
-  }
+  syncApplicantListRecord_(row, displayRow, headers, rowNumber, columns, applicantStore);
 }
 
-function assignJobIdIfNeeded_(sheet, rowNumber, jobIdCol, titleCol) {
-  const title = String(sheet.getRange(rowNumber, titleCol + 1).getDisplayValue() || "").trim();
-  const currentJobId = String(sheet.getRange(rowNumber, jobIdCol + 1).getDisplayValue() || "").trim();
-
-  if (!title || currentJobId) {
-    return;
+function syncApplicantListRecord_(row, displayRow, headers, sheetRowNumber, columns, applicantStore) {
+  const resolvedColumns = columns || getJobColumns_(headers);
+  const title = colDisplay_(displayRow, resolvedColumns.title, "");
+  if (!String(title || "").trim()) {
+    return null;
   }
 
-  const nextJobId = getNextJobId_(sheet, jobIdCol);
-  sheet.getRange(rowNumber, jobIdCol + 1).setValue(nextJobId);
-}
+  const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
+  const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, resolvedColumns);
+  const record = applicantStore
+    ? getApplicantRecordForJob_(applicantStore, generatedId, sourceKey)
+    : null;
 
-function getNextJobId_(sheet, jobIdCol) {
-  const lastRow = sheet.getLastRow();
-
-  if (lastRow <= HEADER_ROW) {
-    return buildJobId_(1);
-  }
-
-  const values = sheet
-    .getRange(HEADER_ROW + 1, jobIdCol + 1, lastRow - HEADER_ROW, 1)
-    .getDisplayValues()
-    .flat();
-
-  let maxNumber = 0;
-
-  for (const value of values) {
-    const text = String(value || "").trim();
-    const match = text.match(/^job_(\d+)$/);
-
-    if (!match) {
-      continue;
-    }
-
-    const num = Number(match[1]);
-    if (Number.isFinite(num) && num > maxNumber) {
-      maxNumber = num;
-    }
-  }
-
-  return buildJobId_(maxNumber + 1);
-}
-
-function buildJobId_(num) {
-  return `${JOB_ID_PREFIX}${String(num).padStart(JOB_ID_DIGITS, "0")}`;
+  return upsertApplicantRecord_(applicantStore || getApplicantListStore_(), {
+    jobId: record?.jobId || generatedId,
+    sourceKey,
+    title
+  });
 }
 
 /* =========================================
@@ -704,50 +683,52 @@ function apply_(params) {
   if (!contactEmail || !isValidEmail_(contactEmail)) {
     throw apiError_("invalid_email", "メールアドレスが不正です");
   }
+  const applicationTimestamp = new Date().toISOString();
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
   try {
     const sheet = getJobsSheet_();
-    const values = sheet.getDataRange().getValues();
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    const displayValues = range.getDisplayValues();
     if (values.length < 2) {
       throw apiError_("not_found", "案件が見つかりません");
     }
 
     const headers = values[0].map(h => String(h).trim());
-    const findColumn = (...candidates) => findColumn_(headers, ...candidates);
+    const columns = getJobColumns_(headers);
+    const applicantStore = getApplicantListStore_();
 
-    const titleCol      = findColumn("案件名", "商品名", "title");
-    const deadlineCol   = findColumn("締切日", "deadline", "締切");
-    const maxCol        = findColumn("募集人数", "max_applicants");
-    const countCol      = findColumn("applicant_count");
-    const applicantsCol = findColumn("applicants", "応募者", "応募者名");
-    const jobIdCol      = findColumn("job_id", "id");
-
-    if (titleCol < 0) {
+    if (columns.title < 0) {
       throw apiError_("config_error", "案件名列が見つかりません");
     }
-    if (applicantsCol < 0) {
-      throw apiError_("config_error", "applicants 列不存在");
-    }
 
-    const rowIndex = findJobRowIndex_(values, headers, jobId);
+    const rowIndex = findJobRowIndex_(values, headers, jobId, displayValues, applicantStore);
     if (rowIndex < 1) {
       throw apiError_("not_found", "案件が見つかりません");
     }
 
     const row = values[rowIndex];
-    const sheetRow = rowIndex + 1;
+    const displayRow = displayValues[rowIndex] || [];
+    const sheetRowNumber = rowIndex + 1;
 
-    const deadline = deadlineCol >= 0 ? row[deadlineCol] : "";
-    const max = normalizeNumber_(maxCol >= 0 ? row[maxCol] : 0);
-    const title = String(row[titleCol] || "");
-    const explicitJobId = jobIdCol >= 0 ? String(row[jobIdCol] || "").trim() : "";
+    const deadline = columns.deadline >= 0 ? row[columns.deadline] : "";
+    const max = normalizeNumber_(columns.max >= 0 ? row[columns.max] : 0);
+    const title = String(displayRow[columns.title] || row[columns.title] || "");
+    const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
+    const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
+    const applicantRecord = getApplicantRecordForJob_(applicantStore, generatedId, sourceKey);
+    const canonicalJobId = applicantRecord?.jobId || generatedId;
 
-    const existingApplicantsText = String(row[applicantsCol] || "").trim();
+    const existingApplicantsText = applicantRecord?.applicantsText || "";
     const applicantsList = splitLines_(existingApplicantsText);
-    const currentCount = countCol >= 0 ? normalizeNumber_(row[countCol]) : applicantsList.length;
+    const applicantEmailsList = splitLines_(applicantRecord?.applicantEmailsText || "");
+    const cancelPolicyConsentsList = splitLines_(applicantRecord?.cancelPolicyConsentsText || "");
+    const cancelPolicyCheckedAtList = splitLines_(applicantRecord?.cancelPolicyCheckedAtText || "");
+    const appliedAtList = splitLines_(applicantRecord?.appliedAtText || "");
+    const currentCount = applicantRecord ? applicantRecord.applicantCount : applicantsList.length;
 
     if (isDeadlinePassed_(deadline)) {
       throw apiError_("deadline_passed", "応募締切を過ぎています");
@@ -762,18 +743,30 @@ function apply_(params) {
     }
 
     applicantsList.push(applicantName);
+    applicantEmailsList.push(contactEmail);
+    cancelPolicyConsentsList.push(acceptedCancelPolicy ? "TRUE" : "FALSE");
+    cancelPolicyCheckedAtList.push(acceptedCancelPolicy ? applicationTimestamp : "");
+    appliedAtList.push(applicationTimestamp);
     const newCount = applicantsList.length;
 
-    if (countCol >= 0) {
-      sheet.getRange(sheetRow, countCol + 1).setValue(newCount);
-    }
-    sheet.getRange(sheetRow, applicantsCol + 1).setValue(applicantsList.join("\n"));
+    upsertApplicantRecord_(applicantStore, {
+      jobId: canonicalJobId,
+      sourceKey,
+      title,
+      applicantCount: newCount,
+      applicantsText: applicantsList.join("\n"),
+      applicantEmailsText: applicantEmailsList.join("\n"),
+      cancelPolicyConsentsText: cancelPolicyConsentsList.join("\n"),
+      cancelPolicyCheckedAtText: cancelPolicyCheckedAtList.join("\n"),
+      appliedAtText: appliedAtList.join("\n"),
+      deadlineNotifiedAt: applicantRecord?.deadlineNotifiedAt || ""
+    });
 
     sendConfirmationEmail_(contactEmail, applicantName, title, deadline);
 
     return {
       ok: true,
-      job_id: explicitJobId || jobId,
+      job_id: canonicalJobId,
       applicantCount: newCount
     };
 
@@ -816,21 +809,18 @@ function sendConfirmationEmail_(to, name, jobTitle, deadline) {
 
 function notifyDeadlinePassed() {
   const sheet = getJobsSheet_();
-  const values = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
   if (values.length < 2) {
     return;
   }
 
   const headers = values[0].map(h => String(h).trim());
-  const findColumn = (...candidates) => findColumn_(headers, ...candidates);
+  const columns = getJobColumns_(headers);
+  const applicantStore = getApplicantListStore_();
 
-  const titleCol      = findColumn("案件名", "商品名", "title");
-  const deadlineCol   = findColumn("締切日", "deadline", "締切");
-  const emailCol      = findColumn("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール");
-  const applicantsCol = findColumn("applicants", "応募者", "応募者名");
-  const notifiedCol   = findColumn("deadline_notified_at", "締切通知日時", "通知日時");
-
-  if (titleCol < 0 || deadlineCol < 0 || emailCol < 0 || applicantsCol < 0 || notifiedCol < 0) {
+  if (columns.title < 0 || columns.deadline < 0 || columns.email < 0) {
     return;
   }
 
@@ -845,10 +835,16 @@ function notifyDeadlinePassed() {
   });
 
   values.slice(1).forEach((row, i) => {
-    const deadline = row[deadlineCol];
-    const notified = row[notifiedCol];
-    const clientEmail = String(row[emailCol] || "").trim();
-    const title = String(row[titleCol] || "");
+    const displayRow = displayValues[i + 1] || [];
+    const sheetRowNumber = i + 2;
+    const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
+    const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
+    const applicantRecord = getApplicantRecordForJob_(applicantStore, generatedId, sourceKey);
+    const canonicalJobId = applicantRecord?.jobId || generatedId;
+    const deadline = row[columns.deadline];
+    const notified = applicantRecord?.deadlineNotifiedAt || "";
+    const clientEmail = String(row[columns.email] || "").trim();
+    const title = String(displayRow[columns.title] || row[columns.title] || "");
 
     if (!deadline || notified || !clientEmail) {
       return;
@@ -867,7 +863,7 @@ function notifyDeadlinePassed() {
       return;
     }
 
-    const applicantsText = String(row[applicantsCol] || "").trim();
+    const applicantsText = applicantRecord?.applicantsText || "";
     const names = splitLines_(applicantsText);
 
     const applicantLines = names.map(name => {
@@ -887,13 +883,257 @@ function notifyDeadlinePassed() {
     ].join("\n");
 
     GmailApp.sendEmail(clientEmail, subject, body);
-    sheet.getRange(i + 2, notifiedCol + 1).setValue(new Date().toISOString());
+    upsertApplicantRecord_(applicantStore, {
+      jobId: canonicalJobId,
+      sourceKey,
+      title,
+      applicantCount: names.length,
+      applicantsText,
+      deadlineNotifiedAt: new Date().toISOString()
+    });
   });
 }
 
 // README互換のトリガー名
 function sendDeadlineMorningEmails() {
   notifyDeadlinePassed();
+}
+
+function getApplicantListStore_() {
+  const sheet = getApplicantListSheet_();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(h => String(h).trim());
+  const columns = getApplicantListColumns_(headers);
+  const records = values.slice(1).map((row, i) => ({
+    rowNumber: i + 2,
+    jobId: String(colValue_(row, columns.jobId, "") || "").trim(),
+    sourceKey: String(colValue_(row, columns.sourceKey, "") || "").trim(),
+    title: String(colValue_(row, columns.title, "") || "").trim(),
+    applicantCount: normalizeNumber_(colValue_(row, columns.count, 0)),
+    applicantsText: String(colValue_(row, columns.applicants, "") || "").trim(),
+    applicantEmailsText: String(colValue_(row, columns.applicantEmails, "") || "").trim(),
+    cancelPolicyConsentsText: String(colValue_(row, columns.cancelPolicyConsents, "") || "").trim(),
+    cancelPolicyCheckedAtText: String(colValue_(row, columns.cancelPolicyCheckedAt, "") || "").trim(),
+    appliedAtText: String(colValue_(row, columns.appliedAt, "") || "").trim(),
+    deadlineNotifiedAt: String(colValue_(row, columns.notified, "") || "").trim()
+  }));
+  const byJobId = {};
+  const bySourceKey = {};
+
+  records.forEach(record => {
+    if (record.jobId) {
+      byJobId[record.jobId] = record;
+    }
+    if (record.sourceKey) {
+      bySourceKey[record.sourceKey] = record;
+    }
+  });
+
+  return { sheet, headers, columns, records, byJobId, bySourceKey };
+}
+
+function getApplicantListColumns_(headers) {
+  const find = (...candidates) => findColumn_(headers, ...candidates);
+
+  return {
+    jobId: find("job_id", "id"),
+    sourceKey: find("source_key"),
+    title: find("案件名", "title"),
+    count: find("applicant_count"),
+    applicants: find("applicants", "応募者", "応募者名"),
+    applicantEmails: find("応募者メールアドレス", "applicant_emails"),
+    cancelPolicyConsents: find("キャンセルポリシー確認済み", "cancel_policy_consents"),
+    cancelPolicyCheckedAt: find("キャンセルポリシー確認日時", "cancel_policy_checked_at"),
+    appliedAt: find("応募日時", "applied_at"),
+    notified: find("deadline_notified_at", "締切通知日時", "通知日時"),
+    updatedAt: find("updated_at")
+  };
+}
+
+function getApplicantRecordForJob_(store, jobId, sourceKey) {
+  if (!store) {
+    return null;
+  }
+
+  return store.byJobId[jobId] || store.bySourceKey[sourceKey] || null;
+}
+
+function upsertApplicantRecord_(store, recordInput) {
+  const record = getApplicantRecordForJob_(store, recordInput.jobId, recordInput.sourceKey);
+  const sheet = store.sheet;
+  const nowIso = new Date().toISOString();
+  const resolvedApplicantsText = String(recordInput.applicantsText ?? record?.applicantsText ?? "").trim();
+  const resolvedApplicantEmailsText = String(recordInput.applicantEmailsText ?? record?.applicantEmailsText ?? "").trim();
+  const resolvedCancelPolicyConsentsText = String(recordInput.cancelPolicyConsentsText ?? record?.cancelPolicyConsentsText ?? "").trim();
+  const resolvedCancelPolicyCheckedAtText = String(recordInput.cancelPolicyCheckedAtText ?? record?.cancelPolicyCheckedAtText ?? "").trim();
+  const resolvedAppliedAtText = String(recordInput.appliedAtText ?? record?.appliedAtText ?? "").trim();
+  const resolvedApplicantCount = recordInput.applicantCount != null
+    ? normalizeNumber_(recordInput.applicantCount)
+    : (resolvedApplicantsText ? splitLines_(resolvedApplicantsText).length : 0);
+  const values = [
+    String(record?.jobId || recordInput.jobId || "").trim(),
+    String(recordInput.sourceKey || record?.sourceKey || "").trim(),
+    String(recordInput.title || record?.title || "").trim(),
+    resolvedApplicantCount,
+    resolvedApplicantsText,
+    resolvedApplicantEmailsText,
+    resolvedCancelPolicyConsentsText,
+    resolvedCancelPolicyCheckedAtText,
+    resolvedAppliedAtText,
+    String(recordInput.deadlineNotifiedAt ?? record?.deadlineNotifiedAt ?? "").trim(),
+    nowIso
+  ];
+
+  if (record) {
+    sheet.getRange(record.rowNumber, 1, 1, values.length).setValues([values]);
+    record.jobId = values[0];
+    record.sourceKey = values[1];
+    record.title = values[2];
+    record.applicantCount = resolvedApplicantCount;
+    record.applicantsText = values[4];
+    record.applicantEmailsText = values[5];
+    record.cancelPolicyConsentsText = values[6];
+    record.cancelPolicyCheckedAtText = values[7];
+    record.appliedAtText = values[8];
+    record.deadlineNotifiedAt = values[9];
+    store.byJobId[record.jobId] = record;
+    store.bySourceKey[record.sourceKey] = record;
+    return record;
+  }
+
+  sheet.appendRow(values);
+  const newRecord = {
+    rowNumber: sheet.getLastRow(),
+    jobId: values[0],
+    sourceKey: values[1],
+    title: values[2],
+    applicantCount: resolvedApplicantCount,
+    applicantsText: values[4],
+    applicantEmailsText: values[5],
+    cancelPolicyConsentsText: values[6],
+    cancelPolicyCheckedAtText: values[7],
+    appliedAtText: values[8],
+    deadlineNotifiedAt: values[9]
+  };
+  store.records.push(newRecord);
+  if (newRecord.jobId) {
+    store.byJobId[newRecord.jobId] = newRecord;
+  }
+  if (newRecord.sourceKey) {
+    store.bySourceKey[newRecord.sourceKey] = newRecord;
+  }
+  return newRecord;
+}
+
+function getJobColumns_(headers) {
+  const find = (...candidates) => findColumn_(headers, ...candidates);
+
+  return {
+    jobId: find("job_id", "id"),
+    timestamp: find("タイムスタンプ", "timestamp"),
+    title: find("案件名（サイト上の見出し）", "案件名", "商品名", "title", "案件タイトル"),
+    productName: find("商品名（サービス名、ブランド名等）", "商品名", "product_name", "product"),
+    productUrl: find("商品URL（サービスの場合はHP等）", "商品URL", "product_url", "url"),
+    description: find("案件説明", "description", "shoot_description", "shooting_content"),
+    media: find("媒体", "media", "media_usage"),
+    reward: find("報酬・交通費込（数値のみ）", "報酬（交通費込）", "報酬", "fee"),
+    duration: find("拘束時間（分単位）※数字のみ", "拘束時間", "duration", "duration_hours"),
+    hourlyWage: find("時給", "hourly_wage", "wage"),
+    date: find("実施日時", "date", "candidate_shoot_dates"),
+    shootDate1: find("撮影候補日①", "撮影候補日1"),
+    shootDate2: find("撮影候補日②", "撮影候補日2"),
+    shootDate3: find("撮影候補日③", "撮影候補日3"),
+    shootDate4: find("撮影候補日④", "撮影候補日4"),
+    shootDate5: find("撮影候補日⑤", "撮影候補日5"),
+    location: find("実施場所", "location", "shoot_location"),
+    requirements: find("応募条件", "requirements"),
+    max: find("募集人数", "max_applicants", "recruitment_number"),
+    concept: find("コンセプト", "concept"),
+    shootingFormat: find("撮影形式", "shooting_format", "format"),
+    makeup: find("メイク・ヘアメイク", "メイク・ヘアメイクの有無", "メイク・ヘアメイクスタッフの有無", "makeup"),
+    makeupImage: find("メイク・ヘアメイクのイメージ", "メイクイメージ", "makeup_image"),
+    outfitAvailability: find("衣装の有無", "衣装有無", "outfit_availability"),
+    outfit: find("衣装", "wardrobe", "outfit"),
+    belongings: find("その他持ち物", "持ち物", "belongings", "items_to_bring"),
+    period: find("使用期間", "試用期間", "period", "usage_period"),
+    competition: find("競合", "competition", "competition_presence"),
+    remaining: find("残り日数"),
+    selection: find("選考方法", "selection_method"),
+    deadline: find("締切日", "deadline", "締切"),
+    emergencyContact: find("撮影当日の緊急連絡先", "緊急連絡先", "emergency_contact"),
+    email: find("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール"),
+    form: find("form_url"),
+    category: find("category"),
+    count: find("applicant_count"),
+    notified: find("deadline_notified_at", "締切通知日時", "通知日時"),
+    applicants: find("applicants", "応募者", "応募者名")
+  };
+}
+
+function getShootDatesFromRow_(row, displayRow, columns) {
+  const candidateCols = [
+    columns.shootDate1,
+    columns.shootDate2,
+    columns.shootDate3,
+    columns.shootDate4,
+    columns.shootDate5
+  ].filter(col => col >= 0);
+
+  const dates = candidateCols
+    .map(col => colDisplay_(displayRow, col, ""))
+    .map(value => String(value || "").trim())
+    .filter(Boolean);
+
+  if (dates.length > 0) {
+    return dates;
+  }
+
+  const fallback = colDisplay_(displayRow, columns.date, "");
+  return fallback ? [String(fallback).trim()] : [];
+}
+
+function formatRewardDisplay_(rawValue, displayValue) {
+  const display = String(displayValue || "").trim();
+  if (display && /円/.test(display)) {
+    return display;
+  }
+
+  const amount = normalizeNumber_(rawValue);
+  if (!amount) {
+    return display;
+  }
+
+  return `${amount.toLocaleString("ja-JP")}円（交通費込）`;
+}
+
+function formatDurationDisplay_(rawValue, displayValue) {
+  const display = String(displayValue || "").trim();
+  if (display && /分|時間/.test(display)) {
+    return display;
+  }
+
+  const minutes = normalizeNumber_(rawValue);
+  if (!minutes) {
+    return display;
+  }
+  if (minutes < 60) {
+    return `${minutes}分`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainMinutes = minutes % 60;
+  return remainMinutes > 0 ? `${hours}時間${remainMinutes}分` : `${hours}時間`;
+}
+
+function computeHourlyWage_(rewardValue, durationValue) {
+  const reward = normalizeNumber_(rewardValue);
+  const durationMinutes = normalizeNumber_(durationValue);
+
+  if (!reward || !durationMinutes) {
+    return 0;
+  }
+
+  return Math.round((reward * 60) / durationMinutes);
 }
 
 /* =========================================
@@ -957,17 +1197,87 @@ function verifyToken_(token) {
    Utilities
 ========================================= */
 
-function getJobsSheet_() {
+function getSpreadsheet_() {
   const id = getProperty_("SPREADSHEET_ID");
-  const ss = runWithRetry_(function() {
+  return runWithRetry_(function() {
     return SpreadsheetApp.openById(id);
   }, DEFAULT_RETRY_COUNT, DEFAULT_RETRY_BASE_MS);
+}
+
+function getJobsSheet_() {
+  const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName(SHEET_NAMES.jobs);
 
   if (!sheet) {
     throw apiError_("config_error", `${SHEET_NAMES.jobs} シート不存在`);
   }
   return sheet;
+}
+
+function getApplicantListSheet_() {
+  const ss = getSpreadsheet_();
+  let sheet = ss.getSheetByName(SHEET_NAMES.applicants);
+
+  if (!sheet) {
+    const jobsSheet = ss.getSheetByName(SHEET_NAMES.jobs);
+    const insertIndex = jobsSheet ? jobsSheet.getIndex() + 1 : ss.getNumSheets() + 1;
+    sheet = ss.insertSheet(SHEET_NAMES.applicants, insertIndex);
+  }
+
+  ensureApplicantListHeaderRow_(sheet);
+  return sheet;
+}
+
+function ensureApplicantListHeaderRow_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+
+  if (lastCol === 0 || lastRow === 0) {
+    sheet.getRange(HEADER_ROW, 1, 1, APPLICANT_LIST_HEADERS.length).setValues([APPLICANT_LIST_HEADERS]);
+    return;
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, Math.max(lastCol, APPLICANT_LIST_HEADERS.length))
+    .getValues()[0]
+    .map(h => String(h).trim());
+  if (isExactHeaderSequence_(headers, APPLICANT_LIST_HEADERS)) {
+    return;
+  }
+
+  if (isExactHeaderSequence_(headers, LEGACY_APPLICANT_LIST_HEADERS)) {
+    migrateLegacyApplicantListSheet_(sheet);
+    return;
+  }
+
+  sheet.getRange(HEADER_ROW, 1, 1, APPLICANT_LIST_HEADERS.length).setValues([APPLICANT_LIST_HEADERS]);
+}
+
+function isExactHeaderSequence_(headers, expected) {
+  return expected.every((header, index) => String(headers[index] || "").trim() === header);
+}
+
+function migrateLegacyApplicantListSheet_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  const legacyRows = values.slice(1);
+  const migratedRows = legacyRows.map(row => ([
+    String(row[0] || "").trim(),
+    String(row[1] || "").trim(),
+    String(row[2] || "").trim(),
+    normalizeNumber_(row[3]),
+    String(row[4] || "").trim(),
+    "",
+    "",
+    "",
+    "",
+    String(row[5] || "").trim(),
+    String(row[6] || "").trim()
+  ]));
+
+  sheet.getRange(HEADER_ROW, 1, 1, APPLICANT_LIST_HEADERS.length).setValues([APPLICANT_LIST_HEADERS]);
+  if (migratedRows.length > 0) {
+    sheet.getRange(HEADER_ROW + 1, 1, migratedRows.length, APPLICANT_LIST_HEADERS.length).setValues(migratedRows);
+  }
 }
 
 function getProperty_(key) {
@@ -1017,13 +1327,37 @@ function findSheetWithHeader_(ss, headerName) {
 }
 
 function findColumn_(headers, ...candidates) {
+  const normalizedHeaders = headers.map(normalizeHeaderLabel_);
+
   for (const candidate of candidates) {
     const i = headers.indexOf(candidate);
     if (i >= 0) {
       return i;
     }
+
+    const normalizedCandidate = normalizeHeaderLabel_(candidate);
+    const normalizedExactIndex = normalizedHeaders.findIndex(header => header === normalizedCandidate);
+
+    if (normalizedExactIndex >= 0) {
+      return normalizedExactIndex;
+    }
+
+    const normalizedPrefixIndex = normalizedHeaders.findIndex(header =>
+      header.indexOf(normalizedCandidate) === 0
+    );
+
+    if (normalizedPrefixIndex >= 0) {
+      return normalizedPrefixIndex;
+    }
   }
   return -1;
+}
+
+function normalizeHeaderLabel_(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 function colValue_(row, colIndex, fallback = "") {
@@ -1034,22 +1368,65 @@ function colDisplay_(row, colIndex, fallback = "") {
   return colIndex >= 0 ? row[colIndex] : fallback;
 }
 
+function getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns) {
+  const resolvedColumns = columns || getJobColumns_(headers);
+  const timestampValue = resolvedColumns.timestamp >= 0
+    ? (colValue_(row, resolvedColumns.timestamp, "") || colDisplay_(displayRow, resolvedColumns.timestamp, ""))
+    : "";
+  const timestampText = normalizeSourceValue_(timestampValue);
+
+  if (timestampText) {
+    return `timestamp:${hash_(timestampText)}`;
+  }
+
+  const fallbackSeed = [
+    colDisplay_(displayRow, resolvedColumns.title, "") || colValue_(row, resolvedColumns.title, ""),
+    colDisplay_(displayRow, resolvedColumns.productName, "") || colValue_(row, resolvedColumns.productName, ""),
+    String(sheetRowNumber || "")
+  ]
+    .map(value => normalizeSourceValue_(value))
+    .filter(Boolean)
+    .join("|");
+
+  return `row:${hash_(fallbackSeed || String(sheetRowNumber || ""))}`;
+}
+
 function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
   const jobIdCol = findColumn_(headers, "job_id", "id");
   const raw = jobIdCol >= 0 ? (displayRow[jobIdCol] || row[jobIdCol]) : "";
   const explicitId = String(raw || "").trim();
-  return explicitId || `job_${sheetRowNumber}`;
+  if (explicitId) {
+    return explicitId;
+  }
+
+  const columns = getJobColumns_(headers);
+  const identitySource = [
+    colDisplay_(displayRow, columns.timestamp, "") || colValue_(row, columns.timestamp, ""),
+    colDisplay_(displayRow, columns.title, "") || colValue_(row, columns.title, ""),
+    colDisplay_(displayRow, columns.productName, "") || colValue_(row, columns.productName, "")
+  ]
+    .map(value => String(value || "").trim())
+    .filter(Boolean)
+    .join("|");
+
+  return identitySource ? `${JOB_ID_PREFIX}${hash_(identitySource).slice(0, 12)}` : `job_${sheetRowNumber}`;
 }
 
-function findJobRowIndex_(values, headers, jobId) {
+function findJobRowIndex_(values, headers, jobId, displayValues, applicantStore) {
   const jobIdCol = findColumn_(headers, "job_id", "id");
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
+    const displayRow = Array.isArray(displayValues?.[i]) ? displayValues[i] : row;
     const explicitId = jobIdCol >= 0 ? String(row[jobIdCol] || "").trim() : "";
-    const fallbackId = `job_${i + 1}`;
+    const fallbackId = getJobIdFromRow_(row, displayRow, headers, i + 1);
+    const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, i + 1);
+    const applicantRecord = applicantStore
+      ? getApplicantRecordForJob_(applicantStore, fallbackId, sourceKey)
+      : null;
+    const storedJobId = applicantRecord?.jobId || "";
 
-    if (jobId === explicitId || jobId === fallbackId) {
+    if (jobId === explicitId || jobId === fallbackId || (storedJobId && jobId === storedJobId)) {
       return i;
     }
   }
@@ -1159,13 +1536,25 @@ function normalizeNumber_(value) {
     return 0;
   }
 
-  const matched = text.match(/\d+/);
+  const normalized = text.replace(/,/g, "");
+  const matched = normalized.match(/-?\d+(?:\.\d+)?/);
   if (!matched) {
     return 0;
   }
 
   const num = Number(matched[0]);
   return Number.isFinite(num) ? num : 0;
+}
+
+function normalizeSourceValue_(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, TZ, "yyyy-MM-dd'T'HH:mm:ss.SSS");
+  }
+
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeName_(value) {
