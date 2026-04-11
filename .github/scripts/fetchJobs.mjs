@@ -86,7 +86,7 @@ function getJobColumns(headers) {
   const find = (...candidates) => findColumn(headers, ...candidates);
 
   return {
-    jobId: find('job_id', 'id'),
+    jobId: find('案件ID', 'job_id', 'id'),
     timestamp: find('タイムスタンプ', 'timestamp'),
     title: find('案件名（サイト上の見出し）', '案件名', '商品名', 'title', '案件タイトル'),
     productName: find('商品名（サービス名、ブランド名等）', '商品名', 'product_name', 'product'),

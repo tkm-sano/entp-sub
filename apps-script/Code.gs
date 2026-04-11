@@ -19,7 +19,10 @@ const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
+const JOB_ID_HEADER = "案件ID";
 const JOB_ID_PREFIX = "job_";
+const JOB_ID_SEQUENCE_WIDTH = 3;
+const DEFAULT_JOB_PUBLIC_BASE_URL = "https://job-list.missconnect.jp/jobs";
 const HEADER_ROW = 1;
 const APPLICANT_LIST_HEADERS = [
   "job_id",
@@ -51,8 +54,7 @@ const LEGACY_APPLICANT_LIST_HEADERS = [
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("更新")
-    .addItem("応募者リストを同期", "syncApplicantListSheet_")
-    .addItem("編集をWebページに反映", "runGitHubActionsFromMenu_")
+    .addItem("webページに反映", "runGitHubActionsFromMenu_")
     .addToUi();
 }
 
@@ -73,19 +75,40 @@ function onEdit(e) {
   syncApplicantListRow_(sheet, e.range.getRow());
 }
 
-function runGitHubActionsFromMenu_() {
-  const ui = SpreadsheetApp.getUi();
-  const ref = getDefaultGitHubRef_();
+function onFormSubmit(e) {
+  if (!e || !e.range) {
+    return;
+  }
+
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== SHEET_NAMES.jobs) {
+    return;
+  }
+
+  const rowNumber = e.range.getRow();
+  if (rowNumber <= HEADER_ROW) {
+    return;
+  }
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
 
   try {
-    syncApplicantListSheet_();
-    clearTalentUsersCache_();
+    prepareJobRowForPublish_(sheet, rowNumber);
     SpreadsheetApp.flush();
+    triggerGitHubWorkflowDispatch_(getDefaultGitHubRef_());
+  } finally {
+    lock.releaseLock();
+  }
+}
 
-    const result = triggerGitHubWorkflowDispatch_(ref);
+function runGitHubActionsFromMenu_() {
+  const ui = SpreadsheetApp.getUi();
+
+  try {
+    const result = runWebPublish_();
     const lines = [
       `Webページ反映が完了しました。`,
-      `applicant_sync: completed`,
       `workflow: ${result.workflowId}`,
       `branch: ${result.ref}`,
       `status: ${result.conclusion || result.status || "completed"}`
@@ -102,6 +125,19 @@ function runGitHubActionsFromMenu_() {
       err && err.message ? err.message : "不明なエラー",
       ui.ButtonSet.OK
     );
+  }
+}
+
+function runWebPublish_() {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    prepareJobsForPublish_(getJobsSheet_());
+    SpreadsheetApp.flush();
+    return triggerGitHubWorkflowDispatch_(getDefaultGitHubRef_());
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -206,6 +242,12 @@ function buildGitHubDispatchErrorMessage_(statusCode, body, owner, repo, workflo
   }
 
   if (statusCode === 422) {
+    if (/failed to parse workflow/i.test(message)) {
+      return [
+        base,
+        "workflow ファイルの構文エラーです。GitHub Actions の YAML を修正してください。"
+      ].join("\n");
+    }
     return [
       base,
       "workflow_dispatch が無効、または ref が不正の可能性があります。workflow ファイルに workflow_dispatch があるか確認してください。"
@@ -617,6 +659,76 @@ function fillMissingJobIds() {
   syncApplicantListSheet_();
 }
 
+function prepareJobsForPublish_(sheet) {
+  const jobIdCol = ensureJobIdColumn_(sheet);
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow <= HEADER_ROW) {
+    return;
+  }
+
+  for (let rowNumber = HEADER_ROW + 1; rowNumber <= lastRow; rowNumber += 1) {
+    prepareJobRowForPublish_(sheet, rowNumber, jobIdCol);
+  }
+}
+
+function prepareJobRowForPublish_(sheet, rowNumber, cachedJobIdCol) {
+  if (rowNumber <= HEADER_ROW) {
+    return "";
+  }
+
+  const jobIdCol = cachedJobIdCol || ensureJobIdColumn_(sheet);
+  const lastCol = sheet.getLastColumn();
+  if (lastCol <= 0) {
+    return "";
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, lastCol)
+    .getDisplayValues()[0]
+    .map(h => String(h).trim());
+  const columns = getJobColumns_(headers);
+  const row = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
+  const displayRow = sheet.getRange(rowNumber, 1, 1, lastCol).getDisplayValues()[0];
+  const title = String(colDisplay_(displayRow, columns.title, "") || "").trim();
+
+  if (!title) {
+    return "";
+  }
+
+  const idCell = sheet.getRange(rowNumber, jobIdCol);
+  let jobId = String(idCell.getDisplayValue()).trim();
+
+  if (!jobId) {
+    const legacyJobIdCol = findColumn_(headers, "job_id", "id");
+    if (legacyJobIdCol >= 0 && legacyJobIdCol + 1 !== jobIdCol) {
+      jobId = String(displayRow[legacyJobIdCol] || row[legacyJobIdCol] || "").trim();
+    }
+  }
+
+  if (!jobId) {
+    jobId = generateNextJobId_(sheet, jobIdCol, resolveJobBaseDate_(row, columns));
+    idCell.setValue(jobId);
+  }
+
+  const pageUrl = buildJobPageUrl_(jobId);
+  const folder = ensureJobImageFolder_(jobId);
+  const noteLines = [`Webページ: ${pageUrl}`];
+
+  if (folder) {
+    noteLines.push(`画像フォルダ: ${folder.getUrl()}`);
+  }
+
+  const richText = SpreadsheetApp.newRichTextValue()
+    .setText(jobId)
+    .setLinkUrl(pageUrl)
+    .build();
+
+  idCell.setRichTextValue(richText);
+  idCell.setNote(noteLines.join("\n"));
+  return jobId;
+}
+
 function syncApplicantListRow_(sheet, rowNumber) {
   if (rowNumber <= HEADER_ROW) {
     return;
@@ -941,7 +1053,7 @@ function getApplicantListColumns_(headers) {
   const find = (...candidates) => findColumn_(headers, ...candidates);
 
   return {
-    jobId: find("job_id", "id"),
+    jobId: find(JOB_ID_HEADER, "job_id", "id"),
     sourceKey: find("source_key"),
     title: find("案件名", "title"),
     count: find("applicant_count"),
@@ -1298,6 +1410,72 @@ function getOptionalProperty_(key) {
   return value == null ? "" : String(value).trim();
 }
 
+function ensureJobIdColumn_(sheet) {
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, Math.max(sheet.getLastColumn(), 1))
+    .getDisplayValues()[0];
+
+  for (let i = 0; i < headers.length; i += 1) {
+    if (String(headers[i] || "").trim() === JOB_ID_HEADER) {
+      return i + 1;
+    }
+  }
+
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const nextCol = lastCol + 1;
+  sheet.insertColumnAfter(lastCol);
+  sheet.getRange(HEADER_ROW, nextCol).setValue(JOB_ID_HEADER);
+  return nextCol;
+}
+
+function resolveJobBaseDate_(row, columns) {
+  const timestampValue = columns.timestamp >= 0 ? row[columns.timestamp] : "";
+  return parseDate_(timestampValue) || new Date();
+}
+
+function generateNextJobId_(sheet, jobIdCol, baseDate) {
+  const datePart = Utilities.formatDate(baseDate, TZ, "yyyyMMdd");
+  const prefix = `${JOB_ID_PREFIX}${datePart}_`;
+  const lastRow = sheet.getLastRow();
+  const existingValues = lastRow > HEADER_ROW
+    ? sheet.getRange(HEADER_ROW + 1, jobIdCol, lastRow - HEADER_ROW, 1).getDisplayValues().flat()
+    : [];
+  let maxSequence = 0;
+
+  existingValues.forEach((value) => {
+    const text = String(value || "").trim();
+    if (!text.startsWith(prefix)) {
+      return;
+    }
+    const sequence = Number(text.slice(prefix.length));
+    if (Number.isFinite(sequence)) {
+      maxSequence = Math.max(maxSequence, sequence);
+    }
+  });
+
+  const nextSequence = String(maxSequence + 1).padStart(JOB_ID_SEQUENCE_WIDTH, "0");
+  return `${prefix}${nextSequence}`;
+}
+
+function buildJobPageUrl_(jobId) {
+  const baseUrl = getOptionalProperty_("JOB_PUBLIC_BASE_URL") || DEFAULT_JOB_PUBLIC_BASE_URL;
+  return `${String(baseUrl).replace(/\/+$/, "")}/${encodeURIComponent(jobId)}/`;
+}
+
+function ensureJobImageFolder_(jobId) {
+  const parentFolderId = getOptionalProperty_("JOB_IMAGE_FOLDER_PARENT_ID");
+  if (!parentFolderId) {
+    return null;
+  }
+
+  const parentFolder = DriveApp.getFolderById(parentFolderId);
+  const existing = parentFolder.getFoldersByName(jobId);
+  if (existing.hasNext()) {
+    return existing.next();
+  }
+  return parentFolder.createFolder(jobId);
+}
+
 function getTalentUsersCacheKey_() {
   const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
   const sheetName = getOptionalProperty_("TALENT_SHEET_NAME") || "auto";
@@ -1397,7 +1575,7 @@ function getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, colum
 }
 
 function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
-  const jobIdCol = findColumn_(headers, "job_id", "id");
+  const jobIdCol = findColumn_(headers, JOB_ID_HEADER, "job_id", "id");
   const raw = jobIdCol >= 0 ? (displayRow[jobIdCol] || row[jobIdCol]) : "";
   const explicitId = String(raw || "").trim();
   if (explicitId) {
@@ -1418,7 +1596,7 @@ function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
 }
 
 function findJobRowIndex_(values, headers, jobId, displayValues, applicantStore) {
-  const jobIdCol = findColumn_(headers, "job_id", "id");
+  const jobIdCol = findColumn_(headers, JOB_ID_HEADER, "job_id", "id");
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];

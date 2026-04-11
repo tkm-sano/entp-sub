@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      WORKFLOW_SUMMARY_DIR: ${{ runner.temp }}/job-sync-summary
+      WORKFLOW_SUMMARY_DIR: .github/tmp/job-sync-summary
 
     steps:
       - name: Checkout
@@ -168,7 +168,7 @@ jobs:
         run: node .github/scripts/writeWorkflowSummary.mjs
         env:
           WORKFLOW_MODE: spreadsheet
-          CHANGESET_PATH: ${{ runner.temp }}/job-sync-summary/content-status.txt
+          CHANGESET_PATH: .github/tmp/job-sync-summary/content-status.txt
           CHANGESET_FORMAT: status
           VERIFY_ENV_EXIT_CODE: ${{ steps.verify_env.outputs.exit_code }}
           SETUP_NODE_CONCLUSION: ${{ steps.setup_node.conclusion }}
