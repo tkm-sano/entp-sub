@@ -9,7 +9,7 @@ const SHEET_NAMES = {
   applicants: "応募者リスト"
 };
 
-const API_BUILD = "2026-04-11-1";
+const API_BUILD = "2026-04-11-3";
 const GITHUB_API_BASE = "https://api.github.com";
 const TZ = "Asia/Tokyo";
 const TALENT_USERS_CACHE_KEY = "talent_users_v2";
@@ -78,9 +78,14 @@ function runGitHubActionsFromMenu_() {
   const ref = getDefaultGitHubRef_();
 
   try {
+    syncApplicantListSheet_();
+    clearTalentUsersCache_();
+    SpreadsheetApp.flush();
+
     const result = triggerGitHubWorkflowDispatch_(ref);
     const lines = [
-      `GitHub Actions が完了しました。`,
+      `Webページ反映が完了しました。`,
+      `applicant_sync: completed`,
       `workflow: ${result.workflowId}`,
       `branch: ${result.ref}`,
       `status: ${result.conclusion || result.status || "completed"}`
@@ -800,7 +805,7 @@ function sendConfirmationEmail_(to, name, jobTitle, deadline) {
     "ご不明な点はご連絡ください。"
   ].join("\n");
 
-  GmailApp.sendEmail(to, subject, body);
+  MailApp.sendEmail(to, subject, body);
 }
 
 /* =========================================
@@ -882,7 +887,7 @@ function notifyDeadlinePassed() {
       applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）"
     ].join("\n");
 
-    GmailApp.sendEmail(clientEmail, subject, body);
+    MailApp.sendEmail(clientEmail, subject, body);
     upsertApplicantRecord_(applicantStore, {
       jobId: canonicalJobId,
       sourceKey,

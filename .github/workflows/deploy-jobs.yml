@@ -104,10 +104,9 @@ jobs:
         if: steps.fetch_jobs.outputs.exit_code == '0'
         continue-on-error: true
         shell: bash
-        working-directory: .github/scripts
         run: |
           set +e
-          node generateMarkdown.mjs 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/generate-markdown.log"
+          node scripts/generate_job_pages.js 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/generate-markdown.log"
           status=${PIPESTATUS[0]}
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0

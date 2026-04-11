@@ -15,6 +15,18 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function clearExistingJobPages() {
+  if (!fs.existsSync(jobsOutputDir)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(jobsOutputDir)) {
+    if (entry.endsWith(".md")) {
+      fs.unlinkSync(path.join(jobsOutputDir, entry));
+    }
+  }
+}
+
 function readJobs() {
   const raw = fs.readFileSync(jobsDataPath, "utf8");
   const jobs = JSON.parse(raw);
@@ -54,6 +66,7 @@ function writeJobPage(job) {
 
 function main() {
   ensureDir(jobsOutputDir);
+  clearExistingJobPages();
   const jobs = readJobs();
   const writtenFiles = jobs.map(writeJobPage);
   console.log(`Generated ${writtenFiles.length} job pages.`);
