@@ -587,9 +587,13 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber, columns, app
   );
   const titleText = colDisplay_(displayRow, resolvedColumns.title, "");
   const mediaText = colDisplay_(displayRow, resolvedColumns.media, "");
-  const maxApplicants = normalizeNumber_(colValue_(row, resolvedColumns.max, 0));
-  const recruitmentDisplay = String(colDisplay_(displayRow, resolvedColumns.max, "") || "").trim()
-    || (maxApplicants > 0 ? `${maxApplicants}名` : "");
+  const recruitmentRaw = colValue_(row, resolvedColumns.max, "");
+  const maxApplicants = normalizeNumber_(recruitmentRaw);
+  const recruitmentDisplay = String(
+    colDisplay_(displayRow, resolvedColumns.max, "")
+    || recruitmentRaw
+    || ""
+  ).trim() || (maxApplicants > 0 ? `${maxApplicants}名` : "");
   const applicantCount = applicantRecord
     ? applicantRecord.applicantCount
     : (resolvedColumns.count >= 0 ? normalizeNumber_(colValue_(row, resolvedColumns.count, 0)) : 0);
