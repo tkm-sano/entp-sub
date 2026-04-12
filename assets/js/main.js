@@ -124,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function parseDeadlineDate(deadline) {
     if (!deadline) return null;
 
-    const raw = String(deadline).trim();
+    const raw = String(deadline).normalize("NFKC").trim();
     if (!raw || /^残り\s*\d+\s*日$/.test(raw) || /^\d+\s*日$/.test(raw)) {
       return null;
     }
@@ -145,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
-    const raw = String(deadline).trim();
+    const raw = String(deadline).normalize("NFKC").trim();
     if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
     if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
     const today = new Date();
@@ -165,6 +165,48 @@ document.addEventListener("DOMContentLoaded", () => {
       if (text) return text;
     }
     return "";
+  }
+
+  function parseNumericValue(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : NaN;
+    }
+
+    const raw = String(value ?? "")
+      .normalize("NFKC")
+      .trim();
+    if (!raw) {
+      return NaN;
+    }
+
+    const matched = raw.replace(/[,\uFF0C]/g, "").match(/-?\d+(?:\.\d+)?/);
+    if (!matched) {
+      return NaN;
+    }
+
+    const parsed = Number(matched[0]);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  function formatHourlyWageDisplay(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) {
+      return "未設定";
+    }
+
+    if (/[¥円]/.test(raw)) {
+      return raw;
+    }
+
+    const numeric = parseNumericValue(value);
+    if (Number.isFinite(numeric)) {
+      const normalizedRaw = raw.normalize("NFKC").replace(/[,\uFF0C]/g, "");
+      if (/^-?\d+(?:\.\d+)?$/.test(normalizedRaw)) {
+        return `¥${numeric.toLocaleString()}`;
+      }
+    }
+
+    return raw;
   }
 
   function extractDriveFileId(rawUrl) {
@@ -294,7 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       // 時給フィルター
-      const hourlyWage = Number(job.hourly_wage ?? job.hourlyWage);
+      const hourlyWage = parseNumericValue(job.hourly_wage ?? job.hourlyWage);
       if (Number.isFinite(hourlyWage)) {
         if (wageRange === "under-5000" && hourlyWage > 5000) return false;
         if (wageRange === "5000-7500" && (hourlyWage <= 5000 || hourlyWage > 7500)) return false;
@@ -326,22 +368,38 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.jobsList.innerHTML = visible.map(job => {
       const remainingSource = pickFirst(job.remaining, job["残り日数"], job.deadline);
       const remainingDays = calculateRemainingDays(remainingSource);
-      const capacityRaw = Number(job.max_applicants ?? job.maxApplicants);
-      const currentRaw = Number(job.applicant_count ?? job.applicantCount);
-      const capacity = Number.isFinite(capacityRaw) ? `${capacityRaw}人` : "未設定";
-      const current = Number.isFinite(currentRaw) ? `${currentRaw}人` : "0人";
       const category = escapeHtml(String(job.category || job.media || job.shooting_format || "Casting").trim());
       const rawJobId = String(job.job_id || job.id || "").trim();
       const encodedJobId = encodeURIComponent(rawJobId);
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
-      const hourlyWage = Number.isFinite(Number(job.hourly_wage ?? job.hourlyWage))
-        ? `¥${Number(job.hourly_wage ?? job.hourlyWage).toLocaleString()}`
-        : "未設定";
+      const hourlyWage = formatHourlyWageDisplay(job.hourly_wage ?? job.hourlyWage);
       const feeValue = job.fee ?? job.reward ?? job.reward_amount;
-      const feeNumber = Number(feeValue);
+      const feeNumber = parseNumericValue(feeValue);
       const fee = Number.isFinite(feeNumber) && feeNumber > 0
         ? `${feeNumber.toLocaleString()}円（交通費込）`
         : (feeValue ? escapeHtml(String(feeValue)) : "未設定");
+      const duration = escapeHtml(
+        pickFirst(
+          job.duration,
+          job.duration_hours,
+          job.duration_minutes,
+          job["拘束時間（分単位）※数字のみ"],
+          job["拘束時間"],
+          job["拘束時間(時間)"]
+        ) || "未設定"
+      );
+      const shootingArea = escapeHtml(
+        pickFirst(
+          job.location,
+          job.shoot_location,
+          job.place,
+          job.venue,
+          job["実施場所"],
+          job["場所"],
+          job.area,
+          job["撮影エリア"]
+        ) || "未設定"
+      );
       const eyeCatchHtml = renderCardMedia(job);
       const title = escapeHtml(String(job.title || job.name || "案件詳細"));
 
@@ -359,9 +417,9 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="job-card__body">
               <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">時給</span><span class="job-card__meta-value">${escapeHtml(hourlyWage)}</span></p>
-              <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">報酬</span><span class="job-card__meta-value">${fee}</span></p>
-              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">募集枠</span><span class="job-card__meta-value">${escapeHtml(capacity)}</span></p>
-              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">応募数</span><span class="job-card__meta-value">${escapeHtml(current)}</span></p>
+              <p class="job-card__meta-item job-card__wage"><span class="job-card__meta-label">報酬総額</span><span class="job-card__meta-value">${fee}</span></p>
+              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">拘束時間</span><span class="job-card__meta-value">${duration}</span></p>
+              <p class="job-card__meta-item job-card__count"><span class="job-card__meta-label">撮影エリア</span><span class="job-card__meta-value">${shootingArea}</span></p>
             </div>
             <div class="job-card__footer">
               <span class="job-card__cta">詳細を見る</span>

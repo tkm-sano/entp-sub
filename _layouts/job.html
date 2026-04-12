@@ -17,41 +17,13 @@
 <body data-page="job">
   <main class="job-page">
     <section class="job-stage">
-      <section class="job-thumbnail-wrap">
-        <div id="job-thumbnail" class="job-thumbnail job-thumbnail--placeholder" aria-label="案件サムネイル">
-          <span>NO IMAGE</span>
-        </div>
-      </section>
-
       <section class="job-hero">
         <div class="job-hero__panel">
-          <p id="job-kicker" class="job-kicker">Casting Opportunity</p>
+          <div class="job-header-tags">
+            <span id="job-kicker" class="job-chip job-chip--primary">案件情報</span>
+            <span id="job-hero-remaining" class="job-chip job-chip--neutral">未定</span>
+          </div>
           <h1 id="job-title">案件詳細を読み込み中...</h1>
-          <p id="job-hero-summary" class="job-hero-summary">条件と募集内容を確認してください。</p>
-
-          <div class="job-highlight-grid" aria-label="案件ハイライト">
-            <div class="job-highlight-card">
-              <span class="job-highlight-card__label">報酬</span>
-              <strong id="job-hero-reward" class="job-highlight-card__value">-</strong>
-            </div>
-            <div class="job-highlight-card">
-              <span class="job-highlight-card__label">撮影候補日</span>
-              <strong id="job-hero-date" class="job-highlight-card__value">-</strong>
-            </div>
-            <div class="job-highlight-card">
-              <span class="job-highlight-card__label">場所</span>
-              <strong id="job-hero-location" class="job-highlight-card__value">-</strong>
-            </div>
-            <div class="job-highlight-card">
-              <span class="job-highlight-card__label">残り日数</span>
-              <strong id="job-hero-remaining" class="job-highlight-card__value">未定</strong>
-            </div>
-          </div>
-
-          <div class="job-hero-actions">
-            <button id="apply-button" data-job-id="{{ page.job_id | default: '' }}">応募する</button>
-            <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
-          </div>
         </div>
       </section>
     </section>
@@ -59,53 +31,117 @@
     <section class="job-content">
       <section class="job-section-card">
         <div class="job-section-heading">
-          <p class="job-section-heading__eyebrow">Overview</p>
-          <h2>案件概要</h2>
+          <h2>報酬・スケジュール</h2>
         </div>
-        <div class="job-detail-list">
-          <div class="job-detail-item"><span class="job-detail-label">商品名</span><span id="job-product-name">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">商品URL</span><a id="job-product-url" href="#" target="_blank" rel="noreferrer noopener">-</a></div>
-          <div class="job-detail-item"><span class="job-detail-label">拘束時間</span><span id="job-duration">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">想定時給</span><span id="job-hourly-wage">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">募集人数</span><span id="job-recruitment-number">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">撮影候補日</span><span id="job-shoot-dates" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">実施場所</span><span id="job-location">-</span></div>
+        <div class="job-metric-grid">
+          <div class="job-metric-card">
+            <p class="job-field-label">報酬（交通費込）</p>
+            <p id="job-hero-reward" class="job-metric-card__value">-</p>
+          </div>
+          <div class="job-metric-card">
+            <p class="job-field-label">想定時給</p>
+            <p id="job-hourly-wage" class="job-metric-card__value">-</p>
+          </div>
         </div>
-      </section>
-
-      <section class="job-section-card">
-        <div class="job-section-heading">
-          <p class="job-section-heading__eyebrow">Creative</p>
-          <h2>撮影内容</h2>
-        </div>
-        <div class="job-detail-list">
-          <div class="job-detail-item"><span class="job-detail-label">案件説明</span><span id="job-description" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">媒体</span><span id="job-media">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">撮影形式</span><span id="job-shooting-format">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">使用期間</span><span id="job-usage-period">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">競合</span><span id="job-competition">-</span></div>
+        <div class="job-info-stack">
+          <div class="job-info-card">
+            <p class="job-field-label">拘束時間</p>
+            <p id="job-duration" class="job-field-value">-</p>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">撮影候補日</p>
+            <p id="job-shoot-dates" class="job-field-value job-applicants-list">-</p>
+          </div>
         </div>
       </section>
 
       <section class="job-section-card">
         <div class="job-section-heading">
-          <p class="job-section-heading__eyebrow">Application</p>
-          <h2>応募・準備情報</h2>
+          <h2>応募条件</h2>
         </div>
-        <div class="job-detail-list">
-          <div class="job-detail-item"><span class="job-detail-label">応募条件</span><span id="job-requirements" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイク</span><span id="job-makeup-support">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">メイク・ヘアメイクのイメージ</span><span id="job-makeup-image" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">衣装の有無</span><span id="job-outfit-availability">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">衣装</span><span id="job-outfit" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">持ち物</span><span id="job-belongings" class="job-applicants-list">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">選考方法</span><span id="job-selection-method">-</span></div>
-          <div class="job-detail-item"><span class="job-detail-label">緊急連絡先</span><span id="job-emergency-contact" class="job-applicants-list">-</span></div>
+        <div class="job-info-stack">
+          <div class="job-info-card">
+            <p class="job-field-label">応募条件</p>
+            <p id="job-requirements" class="job-field-value job-applicants-list">-</p>
+          </div>
+          <div class="job-info-grid">
+            <div class="job-info-card">
+              <p class="job-field-label">募集人数</p>
+              <p id="job-recruitment-number" class="job-field-value">-</p>
+            </div>
+            <div class="job-info-card">
+              <p class="job-field-label">選考方法</p>
+              <p id="job-selection-method" class="job-field-value">-</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <h2>撮影詳細</h2>
+        </div>
+        <div class="job-info-stack">
+          <div class="job-info-card">
+            <p class="job-field-label">案件説明</p>
+            <p id="job-description" class="job-field-value job-applicants-list">-</p>
+          </div>
+          <div class="job-info-grid">
+            <div class="job-info-card">
+              <p class="job-field-label">実施場所</p>
+              <p id="job-location" class="job-field-value">-</p>
+            </div>
+            <div class="job-info-card">
+              <p class="job-field-label">撮影形式</p>
+              <p id="job-shooting-format" class="job-field-value">-</p>
+            </div>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">商品名</p>
+            <a id="job-product-url" class="job-field-link" href="#" target="_blank" rel="noreferrer noopener">-</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <h2>準備情報</h2>
+        </div>
+        <div class="job-info-stack">
+          <div class="job-info-card">
+            <p class="job-field-label">メイク・ヘアメイク</p>
+            <p id="job-makeup-support" class="job-field-value">-</p>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">衣装</p>
+            <p id="job-outfit" class="job-field-value job-applicants-list">-</p>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">持ち物</p>
+            <p id="job-belongings" class="job-field-value job-applicants-list">-</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="job-section-card">
+        <div class="job-section-heading">
+          <h2>権利・契約</h2>
+        </div>
+        <div class="job-info-grid">
+          <div class="job-info-card">
+            <p class="job-field-label">使用期間</p>
+            <p id="job-usage-period" class="job-field-value">-</p>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">競合</p>
+            <p id="job-competition" class="job-field-value">-</p>
+          </div>
         </div>
       </section>
 
       <div class="job-apply">
-        <button id="apply-button-bottom" data-apply-trigger="true" type="button">この案件に応募する</button>
+        <button id="apply-button-bottom" data-job-id="{{ page.job_id | default: '' }}" data-apply-trigger="true" type="button">この案件に応募する</button>
+        <p id="job-apply-deadline" class="job-apply-deadline">締切：未定</p>
         <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
       </div>
     </section>
@@ -118,10 +154,19 @@
         <div class="apply-confirm-modal__pdf-frame">
           <iframe src="{{ '/assets/docs/cancel-policy.pdf' | relative_url }}" title="キャンセルポリシーPDFプレビュー" aria-label="キャンセルポリシーPDFプレビュー"></iframe>
         </div>
+        <section class="apply-confirm-modal__policy-text" aria-label="キャンセルポリシー本文">
+          <h3>第5条（キャンセルポリシー）</h3>
+          <p>一度受諾した仕事をキャンセルする場合は、以下のポリシーが適用されます。</p>
+          <ul>
+            <li>受諾後のキャンセルにより、スタジオ予約代・ヘアメイク費用・クライアントへのキャンセル料など実費が発生した場合、地震・台風・交通機関の全面停止など、本人の努力では回避できない不可抗力の場合を除き、当社はモデルにその費用を請求することができます。撮影に臨むにあたっては、体調管理やスケジュール管理等を自己責任で徹底してください。</li>
+            <li>当日キャンセル・無断欠席の場合は、今後の仕事紹介をお断りする場合があります。</li>
+          </ul>
+          <p>※状況によっては診断書などの証明書類のご提出をお願いする場合があります。</p>
+        </section>
         <div class="job-consents">
           <label class="job-consent">
             <input type="checkbox" id="modal-consent-cancel-policy">
-            <span>キャンセルポリシー（PDFプレビュー）を確認しました</span>
+            <span>上記のキャンセルポリシーを確認し、同意しました</span>
           </label>
         </div>
         <div class="apply-confirm-modal__actions">
@@ -140,9 +185,10 @@
       const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
       const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
       const confirmApplyButton = document.getElementById("confirm-apply-button");
-      if (!button) return;
+      const applyButtons = [button, secondaryApplyButton].filter(Boolean);
+      if (!applyButtons.length) return;
 
-      const pageJobId = String(button.dataset.jobId || "").trim();
+      const pageJobId = String((button?.dataset.jobId || secondaryApplyButton?.dataset.jobId || "")).trim();
       const queryJobId = new URLSearchParams(window.location.search).get("jobId") || "";
       const jobId = pageJobId || String(queryJobId).trim();
       const apiUrl = window.MENU_TALENT_API_URL || "";
@@ -336,7 +382,7 @@
       function parseDeadlineDate(deadline) {
         if (!deadline) return null;
 
-        const raw = String(deadline).trim();
+        const raw = String(deadline).normalize("NFKC").trim();
         if (!raw || /^残り\s*\d+\s*日$/.test(raw) || /^\d+\s*日$/.test(raw)) {
           return null;
         }
@@ -357,7 +403,7 @@
 
       function calculateRemainingDays(deadline) {
         if (!deadline) return "未定";
-        const raw = String(deadline).trim();
+        const raw = String(deadline).normalize("NFKC").trim();
         if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
         if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
         const today = new Date();
@@ -369,8 +415,85 @@
         return `残り${diffDays}日`;
       }
 
-      function formatImplementationDate(value) {
+      function stripSecondsFromTime(value) {
         const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) return "";
+        return raw.normalize("NFKC").replace(/\b([01]?\d|2[0-3]):([0-5]\d):([0-5]\d)\b/g, "$1:$2");
+      }
+
+      function parseNumericValue(value) {
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? value : NaN;
+        }
+
+        const raw = String(value ?? "").normalize("NFKC").trim();
+        if (!raw) {
+          return NaN;
+        }
+
+        const matched = raw.replace(/[,\uFF0C]/g, "").match(/-?\d+(?:\.\d+)?/);
+        if (!matched) {
+          return NaN;
+        }
+
+        const parsed = Number(matched[0]);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      }
+
+      function formatHourlyWageDisplay(value) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) {
+          return "-";
+        }
+
+        if (/[¥円]/.test(raw)) {
+          return raw;
+        }
+
+        const numeric = parseNumericValue(value);
+        if (Number.isFinite(numeric)) {
+          const normalizedRaw = raw.normalize("NFKC").replace(/[,\uFF0C]/g, "");
+          if (/^-?\d+(?:\.\d+)?$/.test(normalizedRaw)) {
+            return `${numeric.toLocaleString()}円/時`;
+          }
+        }
+
+        return raw;
+      }
+
+      function formatRecruitmentDisplay(value) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) {
+          return "-";
+        }
+
+        if (/名/.test(raw)) {
+          return raw;
+        }
+
+        const numeric = parseNumericValue(value);
+        if (Number.isFinite(numeric)) {
+          const normalizedRaw = raw.normalize("NFKC").replace(/[,\uFF0C]/g, "");
+          if (/^-?\d+(?:\.\d+)?$/.test(normalizedRaw)) {
+            return `${numeric.toLocaleString()}名`;
+          }
+        }
+
+        return raw;
+      }
+
+      function formatDeadlineLabel(deadline) {
+        const parsed = parseDeadlineDate(deadline);
+        if (parsed && !Number.isNaN(parsed.getTime())) {
+          return `締切：${parsed.getMonth() + 1}月${parsed.getDate()}日`;
+        }
+
+        const raw = stripSecondsFromTime(deadline);
+        return raw ? `締切：${raw}` : "締切：未定";
+      }
+
+      function formatImplementationDate(value) {
+        const raw = value === undefined || value === null ? "" : String(value).normalize("NFKC").trim();
         if (!raw) return "";
 
         const jpDateMatch = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
@@ -394,7 +517,7 @@
       function renderJob(job) {
         // 報酬総額
         const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job.reward_amount, job["報酬"]);
-        const totalRewardNumber = Number(totalRewardValue);
+        const totalRewardNumber = parseNumericValue(totalRewardValue);
         const totalReward = Number.isFinite(totalRewardNumber)
           ? `${totalRewardNumber.toLocaleString()}円（交通費込）`
           : (totalRewardValue || "-");
@@ -405,10 +528,7 @@
         
         // 時給（計算値含む）
         const hourlyWageValue = pickFirst(job.hourly_wage, job.hourlyWage, job.wage, job["時給"]);
-        const hourlyWageNumber = Number(hourlyWageValue);
-        const hourlyWage = Number.isFinite(hourlyWageNumber) && hourlyWageNumber > 0
-          ? `${hourlyWageNumber.toLocaleString()}円/時`
-          : (hourlyWageValue || "-");
+        const hourlyWage = formatHourlyWageDisplay(hourlyWageValue);
         
         // 撮影候補日
         const implementationDateRaw = pickFirst(
@@ -426,7 +546,7 @@
           job["実施日時"],
           job["日時"]
         );
-        const implementationDate = implementationDateRaw || "-";
+        const implementationDate = stripSecondsFromTime(implementationDateRaw) || "-";
         
         // 実施場所
         const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);
@@ -443,10 +563,11 @@
         // 募集人数
         const recruitmentNumber = pickFirst(
           job.recruitment_number,
-          job.number_of_applicants,
-          job.max_applicants,
+          job.recruitmentNumber,
           job["募集人数"],
-          job["人数"]
+          job["人数"],
+          job.max_applicants,
+          job.maxApplicants
         );
         
         // 案件説明
@@ -491,62 +612,57 @@
 
         const emergencyContact = pickFirst(job.emergency_contact, job.emergencyContact, job["撮影当日の緊急連絡先"]);
         
-        // サムネイル（画像/動画のどちらでも表示）
-        const mediaSource = resolveThumbnailMediaSource(job);
-        const thumbnailEl = document.getElementById("job-thumbnail");
+        const remainingBadge = document.getElementById("job-hero-remaining");
 
         // メタセクション表示
         const resolvedTitle = pickFirst(job.title, job.name, job.job_title, "案件詳細");
         const category = pickFirst(job.category, job["カテゴリ"], media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
         setText("job-title", resolvedTitle);
-        setTextOrFallback("job-kicker", category, "Casting Opportunity");
-        setTextOrFallback("job-hero-summary", heroSummary, "条件と募集内容を確認してください。");
+        setTextOrFallback("job-kicker", category, "案件情報");
         setTextOrFallback("job-hero-reward", totalReward, "-");
         setTextOrFallback("job-hero-date", implementationDate, "-");
         setTextOrFallback("job-hero-location", location, "-");
         setText("job-hero-remaining", remainingDays);
+        setTextOrFallback("job-apply-deadline", formatDeadlineLabel(job.deadline), "締切：未定");
         document.title = `${resolvedTitle} | 案件詳細`;
 
+        if (remainingBadge) {
+          remainingBadge.classList.remove("job-chip--danger", "job-chip--expired", "job-chip--neutral");
+          if (remainingDays === "期限切れ") {
+            remainingBadge.classList.add("job-chip--expired");
+          } else if (/^残り\d+日$/.test(remainingDays)) {
+            remainingBadge.classList.add("job-chip--danger");
+          } else {
+            remainingBadge.classList.add("job-chip--neutral");
+          }
+        }
+
         // 詳細セクション表示
-        setTextOrFallback("job-product-name", productName, "-");
-        setLinkOrFallback("job-product-url", productUrl, "-");
+        const productLinkLabel = productName ? `${productName} 詳細ページ →` : (productUrl || "-");
+        setLinkOrFallback("job-product-url", productUrl, productLinkLabel);
+        const productLinkEl = document.getElementById("job-product-url");
+        if (productLinkEl) {
+          productLinkEl.textContent = productLinkLabel;
+        }
         setTextOrFallback("job-duration", duration, "-");
         setTextOrFallback("job-hourly-wage", hourlyWage, "-");
-        setTextOrFallback("job-shoot-dates", implementationDate, "-");
+        const shootDatesText = Array.isArray(job.shoot_dates) && job.shoot_dates.length > 0
+          ? job.shoot_dates.map((value) => stripSecondsFromTime(value)).join("\n")
+          : implementationDate;
+        setTextOrFallback("job-shoot-dates", shootDatesText, "-");
         setTextOrFallback("job-location", location, "-");
         setTextOrFallback("job-requirements", requirements, "-");
-        setTextOrFallback("job-recruitment-number", recruitmentNumber, "-");
+        setTextOrFallback("job-recruitment-number", formatRecruitmentDisplay(recruitmentNumber), "-");
         setTextOrFallback("job-description", description, "-");
         setTextOrFallback("job-shooting-format", shootingFormat, "-");
         setTextOrFallback("job-makeup-support", makeupSupport, "-");
-        setTextOrFallback("job-makeup-image", makeupImage, "-");
-        setTextOrFallback("job-outfit-availability", outfitAvailability, "-");
         setTextOrFallback("job-outfit", outfit, "-");
         setTextOrFallback("job-belongings", belongings, "-");
-        setTextOrFallback("job-media", media, "-");
         setTextOrFallback("job-usage-period", usagePeriod, "-");
         setTextOrFallback("job-competition", competition, "-");
         setTextOrFallback("job-selection-method", selectionMethod, "-");
-        setTextOrFallback("job-emergency-contact", emergencyContact, "-");
 
-        if (thumbnailEl) {
-          const titleEscaped = escapeHtml(String(job.title || "案件サムネイル"));
-
-          if (mediaSource.type === "iframe") {
-            thumbnailEl.innerHTML = `<iframe src="${escapeHtml(mediaSource.url)}" title="${titleEscaped}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
-            thumbnailEl.classList.remove("job-thumbnail--placeholder");
-          } else if (mediaSource.type === "video") {
-            thumbnailEl.innerHTML = `<video src="${escapeHtml(mediaSource.url)}" controls playsinline preload="metadata"></video>`;
-            thumbnailEl.classList.remove("job-thumbnail--placeholder");
-          } else if (mediaSource.type === "image") {
-            thumbnailEl.innerHTML = `<img src="${escapeHtml(mediaSource.url)}" alt="${titleEscaped}">`;
-            thumbnailEl.classList.remove("job-thumbnail--placeholder");
-          } else {
-            thumbnailEl.innerHTML = "<span>NO IMAGE</span>";
-            thumbnailEl.classList.add("job-thumbnail--placeholder");
-          }
-        }
       }
 
       async function loadJobDetail() {
@@ -599,7 +715,7 @@
       });
       cancelConfirmButton?.addEventListener("click", closeConfirmModal);
 
-      [button, secondaryApplyButton].forEach((applyTrigger) => {
+      applyButtons.forEach((applyTrigger) => {
         applyTrigger?.addEventListener("click", () => {
           openConfirmModal();
         });

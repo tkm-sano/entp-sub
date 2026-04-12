@@ -578,10 +578,18 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber, columns, app
   const durationRaw = colValue_(row, resolvedColumns.duration, "");
   const durationMinutes = normalizeNumber_(durationRaw);
   const durationDisplay = formatDurationDisplay_(durationRaw, colDisplay_(displayRow, resolvedColumns.duration, ""));
-  const hourlyWageValue = computeHourlyWage_(rewardRaw, durationRaw);
+  const hourlyWageRaw = colValue_(row, resolvedColumns.hourlyWage, "");
+  const hourlyWageDisplay = formatHourlyWageDisplay_(
+    hourlyWageRaw,
+    colDisplay_(displayRow, resolvedColumns.hourlyWage, ""),
+    rewardRaw,
+    durationRaw
+  );
   const titleText = colDisplay_(displayRow, resolvedColumns.title, "");
   const mediaText = colDisplay_(displayRow, resolvedColumns.media, "");
   const maxApplicants = normalizeNumber_(colValue_(row, resolvedColumns.max, 0));
+  const recruitmentDisplay = String(colDisplay_(displayRow, resolvedColumns.max, "") || "").trim()
+    || (maxApplicants > 0 ? `${maxApplicants}名` : "");
   const applicantCount = applicantRecord
     ? applicantRecord.applicantCount
     : (resolvedColumns.count >= 0 ? normalizeNumber_(colValue_(row, resolvedColumns.count, 0)) : 0);
@@ -600,14 +608,14 @@ function buildJobFromRow_(row, displayRow, headers, sheetRowNumber, columns, app
     reward_amount: normalizeNumber_(rewardRaw),
     duration: durationDisplay,
     duration_minutes: durationMinutes,
-    hourly_wage: hourlyWageValue,
+    hourly_wage: hourlyWageDisplay,
     date: shootDateText,
     candidate_shoot_dates: shootDateText,
     shoot_dates: shootDates,
     location: colDisplay_(displayRow, resolvedColumns.location, ""),
     requirements: colDisplay_(displayRow, resolvedColumns.requirements, ""),
     max_applicants: maxApplicants,
-    recruitment_number: maxApplicants,
+    recruitment_number: recruitmentDisplay,
     description: colDisplay_(displayRow, resolvedColumns.description, ""),
     concept: colDisplay_(displayRow, resolvedColumns.concept, "") || colDisplay_(displayRow, resolvedColumns.makeupImage, ""),
     makeup: colDisplay_(displayRow, resolvedColumns.makeup, ""),
@@ -1243,6 +1251,30 @@ function formatDurationDisplay_(rawValue, displayValue) {
   return remainMinutes > 0 ? `${hours}時間${remainMinutes}分` : `${hours}時間`;
 }
 
+function formatHourlyWageDisplay_(rawValue, displayValue, rewardValue, durationValue) {
+  const display = String(displayValue || "").trim();
+  if (display) {
+    const amount = normalizeNumber_(rawValue);
+    const normalizedDisplay = display.normalize("NFKC").replace(/[,\uFF0C]/g, "");
+    if (amount && !/[¥円]/.test(display) && /^-?\d+(?:\.\d+)?$/.test(normalizedDisplay)) {
+      return `${amount.toLocaleString("ja-JP")}円/時`;
+    }
+    return display;
+  }
+
+  const amount = normalizeNumber_(rawValue);
+  if (amount) {
+    return `${amount.toLocaleString("ja-JP")}円/時`;
+  }
+
+  const computed = computeHourlyWage_(rewardValue, durationValue);
+  if (computed) {
+    return `${computed.toLocaleString("ja-JP")}円/時`;
+  }
+
+  return "";
+}
+
 function computeHourlyWage_(rewardValue, durationValue) {
   const reward = normalizeNumber_(rewardValue);
   const durationMinutes = normalizeNumber_(durationValue);
@@ -1657,7 +1689,7 @@ function parseDate_(value) {
     return new Date(value.getTime());
   }
 
-  const text = String(value).trim();
+  const text = String(value).normalize("NFKC").trim();
   if (!text) {
     return null;
   }
@@ -1690,7 +1722,7 @@ function isDeadlinePassed_(deadlineValue) {
 }
 
 function calculateRemainingDaysLabel_(deadlineValue) {
-  const raw = String(deadlineValue || "").trim();
+  const raw = String(deadlineValue || "").normalize("NFKC").trim();
   if (/^残り\s*\d+\s*日$/.test(raw)) {
     return raw.replace(/\s+/g, "");
   }
@@ -1721,12 +1753,14 @@ function normalizeNumber_(value) {
     return Number.isFinite(value) ? value : 0;
   }
 
-  const text = String(value ?? "").trim();
+  const text = String(value ?? "")
+    .normalize("NFKC")
+    .trim();
   if (!text) {
     return 0;
   }
 
-  const normalized = text.replace(/,/g, "");
+  const normalized = text.replace(/[,\uFF0C]/g, "");
   const matched = normalized.match(/-?\d+(?:\.\d+)?/);
   if (!matched) {
     return 0;
