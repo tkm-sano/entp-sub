@@ -645,6 +645,7 @@ function apply_(params) {
     : normalizeName_(params.applicantName);
   const jobId = String(params.jobId || "").trim();
   const acceptedCancelPolicy = String(params.acceptedCancelPolicy || "").trim().toLowerCase() === "true";
+  const acceptedShootDates = String(params.acceptedShootDates || "").trim().toLowerCase() === "true";
 
   if (!jobId) {
     throw apiError_("invalid_param", "jobId 必須");
@@ -654,8 +655,8 @@ function apply_(params) {
     throw apiError_("invalid_param", "応募者名 必須");
   }
 
-  if (!acceptedCancelPolicy) {
-    throw apiError_("consent_required", "キャンセルポリシーの確認が必要です");
+  if (!acceptedCancelPolicy || !acceptedShootDates) {
+    throw apiError_("consent_required", "キャンセルポリシーと撮影候補日の確認が必要です");
   }
 
   const contactEmail = resolveApplicantEmail_(params, tokenPayload);

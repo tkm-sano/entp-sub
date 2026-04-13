@@ -72,15 +72,9 @@
             <p class="job-field-label">応募条件</p>
             <p id="job-requirements" class="job-field-value job-applicants-list">-</p>
           </div>
-          <div class="job-info-grid">
-            <div class="job-info-card">
-              <p class="job-field-label">募集人数</p>
-              <p id="job-recruitment-number" class="job-field-value">-</p>
-            </div>
-            <div class="job-info-card">
-              <p class="job-field-label">選考方法</p>
-              <p id="job-selection-method" class="job-field-value">-</p>
-            </div>
+          <div class="job-info-card">
+            <p class="job-field-label">募集人数</p>
+            <p id="job-recruitment-number" class="job-field-value">-</p>
           </div>
         </div>
       </section>
@@ -173,6 +167,10 @@
             <input type="checkbox" id="modal-consent-cancel-policy">
             <span>上記のキャンセルポリシーを確認し、同意しました</span>
           </label>
+          <label class="job-consent">
+            <input type="checkbox" id="modal-consent-shoot-dates">
+            <span>撮影候補日を確認し、参加可能な日程が1日以上あることを確認しました</span>
+          </label>
         </div>
         <div class="apply-confirm-modal__actions">
           <button type="button" id="cancel-apply-confirm" class="details-button">戻る</button>
@@ -188,6 +186,7 @@
       const secondaryApplyButton = document.getElementById("apply-button-bottom");
       const modal = document.getElementById("apply-confirm-modal");
       const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
+      const modalShootDatesCheckbox = document.getElementById("modal-consent-shoot-dates");
       const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
       const confirmApplyButton = document.getElementById("confirm-apply-button");
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
@@ -218,7 +217,7 @@
       function readableApiError(response) {
         const code = String(response?.errorCode || response?.code || "");
         if (code === "already_applied") return "この案件には既に応募済みです。";
-        if (code === "consent_required") return "キャンセルポリシーの確認が必要です。";
+        if (code === "consent_required") return "キャンセルポリシーと撮影候補日の確認が必要です。";
         if (code === "quota_full") return "応募人数が上限に達しています。";
         if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
         if (code === "forbidden") return "この操作を実行する権限がありません。";
@@ -227,7 +226,7 @@
       }
 
       function hasRequiredConsents() {
-        return Boolean(modalCancelPolicyCheckbox?.checked);
+        return Boolean(modalCancelPolicyCheckbox?.checked) && Boolean(modalShootDatesCheckbox?.checked);
       }
 
       function openConfirmModal() {
@@ -423,6 +422,36 @@
         return raw.normalize("NFKC").replace(/\b([01]?\d|2[0-3]):([0-5]\d):([0-5]\d)\b/g, "$1:$2");
       }
 
+      function formatShootDateEntry(value) {
+        const raw = stripSecondsFromTime(value);
+        if (!raw) return "";
+
+        const normalized = raw.normalize("NFKC").trim();
+        const hasTime = /\b([01]?\d|2[0-3]):[0-5]\d\b/.test(normalized);
+        const hasRange = /[~〜～]/.test(normalized)
+          || /\b([01]?\d|2[0-3]):[0-5]\d\s*[-ー−–]\s*([01]?\d|2[0-3]):[0-5]\d\b/.test(normalized)
+          || /\b([01]?\d|2[0-3]):[0-5]\d\s*to\s*([01]?\d|2[0-3]):[0-5]\d\b/i.test(normalized);
+
+        if (!hasTime || hasRange) {
+          return raw;
+        }
+
+        return `${raw}～`;
+      }
+
+      function formatShootDatesDisplay(value) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) return "";
+
+        return raw
+          .split("\n")
+          .map((line) => line
+            .split(/\s+\/\s+/)
+            .map((entry) => formatShootDateEntry(entry))
+            .join(" / "))
+          .join("\n");
+      }
+
       function parseNumericValue(value) {
         if (typeof value === "number") {
           return Number.isFinite(value) ? value : NaN;
@@ -548,7 +577,7 @@
           job["実施日時"],
           job["日時"]
         );
-        const implementationDate = stripSecondsFromTime(implementationDateRaw) || "-";
+        const implementationDate = formatShootDatesDisplay(implementationDateRaw) || "-";
         
         // 実施場所
         const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);
@@ -609,9 +638,6 @@
         const remainingSource = pickFirst(job.remaining, job["残り日数"], job.deadline);
         const remainingDays = calculateRemainingDays(remainingSource);
         
-        // 選考方法
-        const selectionMethod = pickFirst(job.selection_method, job.selection_process, job.method, job["選考方法"]);
-
         const emergencyContact = pickFirst(job.emergency_contact, job.emergencyContact, job["撮影当日の緊急連絡先"]);
         
         const remainingBadge = document.getElementById("job-hero-remaining");
@@ -650,7 +676,7 @@
         setTextOrFallback("job-duration", duration, "-");
         setTextOrFallback("job-hourly-wage", hourlyWage, "-");
         const shootDatesText = Array.isArray(job.shoot_dates) && job.shoot_dates.length > 0
-          ? job.shoot_dates.map((value) => stripSecondsFromTime(value)).join("\n")
+          ? job.shoot_dates.map((value) => formatShootDateEntry(value)).join("\n")
           : implementationDate;
         setTextOrFallback("job-shoot-dates", shootDatesText, "-");
         setTextOrFallback("job-location", location, "-");
@@ -663,7 +689,6 @@
         setTextOrFallback("job-belongings", belongings, "-");
         setTextOrFallback("job-usage-period", usagePeriod, "-");
         setTextOrFallback("job-competition", competition, "-");
-        setTextOrFallback("job-selection-method", selectionMethod, "-");
 
       }
 
@@ -707,7 +732,7 @@
       });
 
       confirmApplyButton?.addEventListener("click", async () => {
-        if (!hasRequiredConsents()) { alert("キャンセルポリシーの確認が必要です。"); return; }
+        if (!hasRequiredConsents()) { alert("キャンセルポリシーと撮影候補日の確認が必要です。"); return; }
         if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }
 
         const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
@@ -725,7 +750,8 @@
             jobId,
             applicantName,
             contactEmail: contactEmail.trim(),
-            acceptedCancelPolicy: "true"
+            acceptedCancelPolicy: "true",
+            acceptedShootDates: "true"
           };
 
           const data = await jsonpRequest(payload, apiTimeoutMs);
@@ -739,6 +765,7 @@
           alert("応募が完了しました。確認メールをご確認ください。");
           closeConfirmModal();
           modalCancelPolicyCheckbox.checked = false;
+          modalShootDatesCheckbox.checked = false;
           confirmApplyButton.disabled = false;
 
           // 最新の案件情報を再取得して応募者リストを更新
