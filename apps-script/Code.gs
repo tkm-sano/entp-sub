@@ -742,7 +742,18 @@ function apply_(params) {
       deadlineNotifiedAt: applicantRecord?.deadlineNotifiedAt || ""
     });
 
-    sendConfirmationEmail_(contactEmail, applicantName, title, deadline);
+    sendConfirmationEmail_(contactEmail, applicantName, {
+      jobId: canonicalJobId,
+      jobTitle: title,
+      shootDates: getShootDatesFromRow_(row, displayRow, columns).join(" / "),
+      location: colDisplay_(displayRow, columns.location, ""),
+      reward: formatRewardDisplay_(
+        colValue_(row, columns.reward, ""),
+        colDisplay_(displayRow, columns.reward, "")
+      ),
+      deadline,
+      appliedAt: applicationTimestamp
+    });
 
     return {
       ok: true,
@@ -759,25 +770,48 @@ function apply_(params) {
    確認メール送信
 ========================================= */
 
-function sendConfirmationEmail_(to, name, jobTitle, deadline) {
-  let deadlineStr = "未定";
-  const d = parseDate_(deadline);
+function sendConfirmationEmail_(to, name, details) {
+  const jobTitle = String(details?.jobTitle || "").trim() || "案件";
+  const jobId = String(details?.jobId || "").trim();
+  const shootDates = String(details?.shootDates || "").trim();
+  const location = String(details?.location || "").trim();
+  const reward = String(details?.reward || "").trim();
+  const appliedAt = details?.appliedAt;
 
-  if (d) {
-    deadlineStr = Utilities.formatDate(d, TZ, "yyyy年MM月dd日");
-  } else if (deadline) {
-    deadlineStr = String(deadline);
+  let appliedAtStr = "";
+  const appliedAtDate = parseDate_(appliedAt);
+  if (appliedAtDate) {
+    appliedAtStr = Utilities.formatDate(appliedAtDate, TZ, "yyyy年MM月dd日 HH:mm");
+  } else if (appliedAt) {
+    appliedAtStr = String(appliedAt);
   }
+
+  const detailLines = [
+    `案件名：${jobTitle}`,
+    jobId ? `案件ID：${jobId}` : "",
+    shootDates ? `撮影候補日：${shootDates}` : "",
+    location ? `実施場所：${location}` : "",
+    reward ? `報酬：${reward}` : "",
+    appliedAtStr ? `応募日時：${appliedAtStr}` : ""
+  ].filter(Boolean);
 
   const subject = `【応募確認】${jobTitle}`;
   const body = [
     `${name} 様`,
     "",
-    `「${jobTitle}」へのご応募を受け付けました。`,
+    "このたびはご応募いただき、誠にありがとうございます。",
+    `下記案件へのご応募を受け付けましたので、ご連絡申し上げます。`,
     "",
-    `締切：${deadlineStr}`,
+    "■ ご応募内容",
+    detailLines.join("\n"),
     "",
-    "ご不明な点はご連絡ください。"
+    "今後のご案内につきましては、内容が決まり次第、あらためてご連絡いたします。",
+    "また、今回はご希望に添えない結果となった場合にも、その旨をご連絡いたします。",
+    "内容に誤りやご不明な点がございましたら、本メールにご返信ください。",
+    "",
+    "何卒よろしくお願いいたします。",
+    "",
+    "MissConnect"
   ].join("\n");
 
   MailApp.sendEmail(to, subject, body);
