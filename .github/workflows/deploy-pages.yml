@@ -43,8 +43,94 @@ jobs:
             git show --name-status --format="" "$current_sha" > "$WORKFLOW_SUMMARY_DIR/push-changes.txt"
           fi
 
+      - name: Verify spreadsheet sync environment
+        id: verify_env
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "スプレッドシート同期用の環境を確認しています..."
+            if [ -z "${{ secrets.SHEET_ID }}" ]; then
+              echo "Error: SHEET_ID が設定されていません"
+              exit 1
+            fi
+            if [ -z "${{ secrets.SERVICE_ACCOUNT_KEY }}" ]; then
+              echo "Error: SERVICE_ACCOUNT_KEY が設定されていません"
+              exit 1
+            fi
+            echo "環境変数の確認が完了しました"
+          } 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/verify-env.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Setup Node
+        id: setup_node
+        if: steps.verify_env.outputs.exit_code == '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Write service account key
+        id: write_key
+        if: steps.verify_env.outputs.exit_code == '0' && steps.setup_node.conclusion == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          {
+            echo '${{ secrets.SERVICE_ACCOUNT_KEY }}' > .github/scripts/service-account.json
+            echo "サービスアカウントキーを作成しました"
+          } 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/write-key.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Install spreadsheet sync dependencies
+        id: install_deps
+        if: steps.write_key.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        working-directory: .github/scripts
+        run: |
+          set +e
+          npm install 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/install-deps.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Fetch latest jobs from Google Sheets
+        id: fetch_jobs
+        if: steps.install_deps.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        working-directory: .github/scripts
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: |
+          set +e
+          mkdir -p ../../_data
+          node fetchJobs.mjs 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/fetch-jobs.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Generate job detail pages
+        id: generate_markdown
+        if: steps.fetch_jobs.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          node scripts/generate_job_pages.js 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/generate-markdown.log"
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
       - name: Setup Ruby
         id: setup_ruby
+        if: steps.generate_markdown.outputs.exit_code == '0'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
@@ -69,8 +155,18 @@ jobs:
           WORKFLOW_MODE: push
           CHANGESET_PATH: ${{ env.WORKFLOW_SUMMARY_DIR }}/push-changes.txt
           CHANGESET_FORMAT: name-status
+          VERIFY_ENV_EXIT_CODE: ${{ steps.verify_env.outputs.exit_code }}
+          SETUP_NODE_CONCLUSION: ${{ steps.setup_node.conclusion }}
+          WRITE_KEY_EXIT_CODE: ${{ steps.write_key.outputs.exit_code }}
+          INSTALL_DEPS_EXIT_CODE: ${{ steps.install_deps.outputs.exit_code }}
+          FETCH_JOBS_EXIT_CODE: ${{ steps.fetch_jobs.outputs.exit_code }}
+          GENERATE_MARKDOWN_EXIT_CODE: ${{ steps.generate_markdown.outputs.exit_code }}
           SETUP_RUBY_CONCLUSION: ${{ steps.setup_ruby.conclusion }}
           BUILD_SITE_EXIT_CODE: ${{ steps.build_site.outputs.exit_code }}
+
+      - name: Clean up sensitive files
+        if: always()
+        run: rm -f .github/scripts/service-account.json
 
       - name: Upload artifact
         if: steps.build_site.outputs.exit_code == '0'
@@ -82,6 +178,24 @@ jobs:
         if: always()
         shell: bash
         run: |
+          if [ "${{ steps.verify_env.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.setup_node.conclusion }}" = "failure" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.write_key.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.install_deps.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.fetch_jobs.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
+          if [ "${{ steps.generate_markdown.outputs.exit_code }}" != "0" ]; then
+            exit 1
+          fi
           if [ "${{ steps.setup_ruby.conclusion }}" = "failure" ]; then
             exit 1
           fi
