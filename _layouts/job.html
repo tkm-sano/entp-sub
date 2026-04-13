@@ -97,6 +97,10 @@
               <p class="job-field-label">撮影形式</p>
               <p id="job-shooting-format" class="job-field-value">-</p>
             </div>
+            <div class="job-info-card">
+              <p class="job-field-label">媒体</p>
+              <p id="job-media" class="job-field-value">-</p>
+            </div>
           </div>
           <div class="job-info-card">
             <p class="job-field-label">商品名</p>
@@ -113,6 +117,10 @@
           <div class="job-info-card">
             <p class="job-field-label">メイク・ヘアメイク</p>
             <p id="job-makeup-support" class="job-field-value">-</p>
+          </div>
+          <div class="job-info-card">
+            <p class="job-field-label">メイク・ヘアメイクのイメージ</p>
+            <p id="job-makeup-image" class="job-field-value job-applicants-list">-</p>
           </div>
           <div class="job-info-card">
             <p class="job-field-label">衣装</p>
@@ -259,6 +267,52 @@
           if (text) return text;
         }
         return "";
+      }
+
+      function hasValue(value) {
+        if (Array.isArray(value)) {
+          return value.length > 0;
+        }
+
+        if (typeof value === "number") {
+          return Number.isFinite(value);
+        }
+
+        return String(value ?? "").trim() !== "";
+      }
+
+      function normalizeFieldKey(value) {
+        return String(value || "")
+          .normalize("NFKC")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+      }
+
+      function createJobValueResolver(job) {
+        const entries = Object.entries(job || {}).map(([key, value]) => ({
+          normalizedKey: normalizeFieldKey(key),
+          value
+        }));
+
+        return (...candidates) => {
+          for (const candidate of candidates) {
+            if (Object.prototype.hasOwnProperty.call(job, candidate) && hasValue(job[candidate])) {
+              return job[candidate];
+            }
+
+            const normalizedCandidate = normalizeFieldKey(candidate);
+            const matched = entries.find((entry) =>
+              entry.normalizedKey === normalizedCandidate
+              || entry.normalizedKey.indexOf(normalizedCandidate) === 0
+            );
+
+            if (matched && hasValue(matched.value)) {
+              return matched.value;
+            }
+          }
+
+          return "";
+        };
       }
 
       function setTextOrFallback(id, value, fallback) {
@@ -471,10 +525,89 @@
         return Number.isFinite(parsed) ? parsed : NaN;
       }
 
-      function formatHourlyWageDisplay(value) {
+      function parseDurationMinutes(value) {
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? value : NaN;
+        }
+
+        const raw = String(value ?? "").normalize("NFKC").trim();
+        if (!raw) {
+          return NaN;
+        }
+
+        const hourMinuteMatch = raw.match(/(\d+(?:\.\d+)?)\s*時間(?:\s*(\d+(?:\.\d+)?)\s*分)?/);
+        if (hourMinuteMatch) {
+          const hours = Number(hourMinuteMatch[1] || 0);
+          const minutes = Number(hourMinuteMatch[2] || 0);
+          return (hours * 60) + minutes;
+        }
+
+        const minuteMatch = raw.match(/(\d+(?:\.\d+)?)\s*分/);
+        if (minuteMatch) {
+          return Number(minuteMatch[1]);
+        }
+
+        return parseNumericValue(raw);
+      }
+
+      function formatDurationDisplay(value) {
         const raw = value === undefined || value === null ? "" : String(value).trim();
         if (!raw) {
           return "-";
+        }
+
+        if (/分|時間/.test(raw)) {
+          return raw;
+        }
+
+        const minutes = parseDurationMinutes(value);
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+          return raw;
+        }
+
+        if (minutes < 60) {
+          return `${minutes}分`;
+        }
+
+        const hours = Math.floor(minutes / 60);
+        const remainMinutes = minutes % 60;
+        return remainMinutes > 0 ? `${hours}時間${remainMinutes}分` : `${hours}時間`;
+      }
+
+      function formatRewardDisplay(value) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) {
+          return "-";
+        }
+
+        if (/円/.test(raw)) {
+          return raw;
+        }
+
+        const numeric = parseNumericValue(value);
+        if (Number.isFinite(numeric) && numeric > 0) {
+          return `${numeric.toLocaleString()}円（交通費込）`;
+        }
+
+        return raw;
+      }
+
+      function computeHourlyWage(rewardValue, durationValue) {
+        const reward = parseNumericValue(rewardValue);
+        const durationMinutes = parseDurationMinutes(durationValue);
+
+        if (!Number.isFinite(reward) || reward <= 0 || !Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+          return NaN;
+        }
+
+        return Math.round((reward * 60) / durationMinutes);
+      }
+
+      function formatHourlyWageDisplay(value, rewardValue, durationValue) {
+        const raw = value === undefined || value === null ? "" : String(value).trim();
+        if (!raw) {
+          const computed = computeHourlyWage(rewardValue, durationValue);
+          return Number.isFinite(computed) ? `${computed.toLocaleString()}円/時` : "-";
         }
 
         if (/[¥円]/.test(raw)) {
@@ -546,105 +679,94 @@
       }
 
       function renderJob(job) {
-        // 報酬総額
-        const totalRewardValue = pickFirst(job.total_reward, job.totalReward, job.fee, job.reward, job.reward_amount, job["報酬"]);
-        const totalRewardNumber = parseNumericValue(totalRewardValue);
-        const totalReward = Number.isFinite(totalRewardNumber)
-          ? `${totalRewardNumber.toLocaleString()}円（交通費込）`
-          : (totalRewardValue || "-");
-        
-        const productName = pickFirst(job.product_name, job.productName, job["商品名（サービス名、ブランド名等）"], job["商品名"]);
-        const productUrl = pickFirst(job.product_url, job.productUrl, job["商品URL（サービスの場合はHP等）"], job["商品URL"]);
-        const duration = pickFirst(job.duration, job.duration_minutes, job["拘束時間（分単位）※数字のみ"], job["拘束時間"], job["拘束時間(時間)"]);
-        
-        // 時給（計算値含む）
-        const hourlyWageValue = pickFirst(job.hourly_wage, job.hourlyWage, job.wage, job["時給"]);
-        const hourlyWage = formatHourlyWageDisplay(hourlyWageValue);
-        
-        // 撮影候補日
+        const getValue = createJobValueResolver(job);
+        const totalRewardValue = getValue(
+          "total_reward",
+          "totalReward",
+          "fee",
+          "reward",
+          "reward_amount",
+          "報酬・交通費込（数値のみ）",
+          "報酬（交通費込）",
+          "報酬"
+        );
+        const totalReward = formatRewardDisplay(totalRewardValue);
+
+        const productName = pickFirst(
+          getValue("product_name", "productName", "商品名（サービス名、ブランド名等）", "商品名")
+        );
+        const productUrl = pickFirst(
+          getValue("product_url", "productUrl", "商品URL（サービスの場合はHP等）", "商品URL")
+        );
+        const durationValue = getValue(
+          "duration",
+          "duration_minutes",
+          "duration_hours",
+          "拘束時間（分単位）※数字のみ",
+          "拘束時間",
+          "拘束時間(時間)"
+        );
+        const duration = formatDurationDisplay(durationValue);
+
+        const hourlyWageValue = getValue("hourly_wage", "hourlyWage", "wage", "時給", "想定時給");
+        const hourlyWage = formatHourlyWageDisplay(hourlyWageValue, totalRewardValue, durationValue);
+
         const implementationDateRaw = pickFirst(
-          Array.isArray(job.shoot_dates) ? job.shoot_dates.join(" / ") : "",
-          job.candidate_shoot_dates,
-          job.implementation_date,
-          job.execution_date,
-          job.date,
-          job.schedule,
-          job["撮影候補日①"],
-          job["撮影候補日②"],
-          job["撮影候補日③"],
-          job["撮影候補日④"],
-          job["撮影候補日⑤"],
-          job["実施日時"],
-          job["日時"]
+          Array.isArray(getValue("shoot_dates")) ? getValue("shoot_dates").join(" / ") : "",
+          getValue(
+            "candidate_shoot_dates",
+            "implementation_date",
+            "execution_date",
+            "date",
+            "schedule",
+            "撮影候補日①",
+            "撮影候補日②",
+            "撮影候補日③",
+            "撮影候補日④",
+            "撮影候補日⑤",
+            "実施日時",
+            "日時"
+          )
         );
         const implementationDate = formatShootDatesDisplay(implementationDateRaw) || "-";
-        
-        // 実施場所
-        const location = pickFirst(job.location, job.place, job.venue, job["実施場所"], job["場所"]);
-        
-        // 応募条件
+
+        const location = pickFirst(getValue("location", "place", "venue", "実施場所", "場所"));
         const requirements = pickFirst(
-          job.requirements,
-          job.qualifications,
-          job.conditions,
-          job["応募条件"],
-          job["条件"]
+          getValue("requirements", "qualifications", "conditions", "応募条件", "条件")
         );
-        
-        // 募集人数
         const recruitmentNumber = pickFirst(
-          job.recruitment_number,
-          job.recruitmentNumber,
-          job["募集人数"],
-          job["人数"],
-          job.max_applicants,
-          job.maxApplicants
+          getValue("recruitment_number", "recruitmentNumber", "募集人数", "人数", "max_applicants", "maxApplicants")
         );
-        
-        // 案件説明
-        const description = pickFirst(job.description, job.details, job.shooting_content, job["案件説明"]);
-        
-        // メイク・ヘアメイク
+        const description = pickFirst(getValue("description", "details", "shooting_content", "案件説明"));
         const makeupSupport = pickFirst(
-          job.makeup,
-          job.makeup_staff,
-          job.hair_makeup_staff,
-          job.make_hair_makeup,
-          job["メイク・ヘアメイク"],
-          job["メイク・ヘアメイクの有無"],
-          job["メイク・ヘアメイクスタッフの有無"]
+          getValue(
+            "makeup",
+            "makeup_staff",
+            "hair_makeup_staff",
+            "make_hair_makeup",
+            "メイク・ヘアメイク",
+            "メイク・ヘアメイクの有無",
+            "メイク・ヘアメイクスタッフの有無"
+          )
         );
-
-        const makeupImage = pickFirst(job.makeup_image, job.makeupImage, job.concept, job.concept_line, job["メイク・ヘアメイクのイメージ"], job["コンセプト"]);
-
-        const outfitAvailability = pickFirst(job.outfit_availability, job.outfitAvailability, job["衣装の有無"]);
-        const outfit = pickFirst(job.outfit, job.wardrobe, job["衣装"]);
-        
-        // 持ち物
-        const belongings = pickFirst(job.belongings, job["その他持ち物"], job["持ち物"]);
-        
-        // 媒体
-        const media = pickFirst(job.media, job.medium, job["媒体"]);
-
-        const shootingFormat = pickFirst(job.shooting_format, job.shootingFormat, job["撮影形式"]);
-        
-        // 使用期間
-        const usagePeriod = pickFirst(job.usage_period, job.period, job["使用期間"]);
-        
-        // 競合
-        const competition = pickFirst(job.competition, job.conflict, job["競合"]);
-        
-        // 残り日数
-        const remainingSource = pickFirst(job.remaining, job["残り日数"], job.deadline);
+        const makeupImage = pickFirst(
+          getValue("makeup_image", "makeupImage", "メイク・ヘアメイクのイメージ", "コンセプト", "concept", "concept_line")
+        );
+        const outfitAvailability = pickFirst(getValue("outfit_availability", "outfitAvailability", "衣装の有無"));
+        const outfit = pickFirst(getValue("outfit", "wardrobe", "衣装"), outfitAvailability);
+        const belongings = pickFirst(getValue("belongings", "その他持ち物", "持ち物"));
+        const media = pickFirst(getValue("media", "medium", "媒体"));
+        const shootingFormat = pickFirst(getValue("shooting_format", "shootingFormat", "撮影形式"));
+        const usagePeriod = pickFirst(getValue("usage_period", "period", "使用期間"));
+        const competition = pickFirst(getValue("competition", "conflict", "競合"));
+        const remainingSource = pickFirst(getValue("remaining", "残り日数"), getValue("deadline", "締切日", "締切"));
         const remainingDays = calculateRemainingDays(remainingSource);
-        
-        const emergencyContact = pickFirst(job.emergency_contact, job.emergencyContact, job["撮影当日の緊急連絡先"]);
-        
         const remainingBadge = document.getElementById("job-hero-remaining");
-
-        // メタセクション表示
-        const resolvedTitle = pickFirst(job.title, job.name, job.job_title, "案件詳細");
-        const category = pickFirst(job.category, job["カテゴリ"], media, shootingFormat);
+        const resolvedTitle = pickFirst(
+          getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル"),
+          "案件詳細"
+        );
+        const category = pickFirst(getValue("category", "カテゴリ"), media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "案件情報");
@@ -652,7 +774,7 @@
         setTextOrFallback("job-hero-date", implementationDate, "-");
         setTextOrFallback("job-hero-location", location, "-");
         setText("job-hero-remaining", remainingDays);
-        setTextOrFallback("job-apply-deadline", formatDeadlineLabel(job.deadline), "締切：未定");
+        setTextOrFallback("job-apply-deadline", formatDeadlineLabel(getValue("deadline", "締切日", "締切")), "締切：未定");
         document.title = `${resolvedTitle} | 案件詳細`;
 
         if (remainingBadge) {
@@ -675,8 +797,9 @@
         }
         setTextOrFallback("job-duration", duration, "-");
         setTextOrFallback("job-hourly-wage", hourlyWage, "-");
-        const shootDatesText = Array.isArray(job.shoot_dates) && job.shoot_dates.length > 0
-          ? job.shoot_dates.map((value) => formatShootDateEntry(value)).join("\n")
+        const resolvedShootDates = getValue("shoot_dates");
+        const shootDatesText = Array.isArray(resolvedShootDates) && resolvedShootDates.length > 0
+          ? resolvedShootDates.map((value) => formatShootDateEntry(value)).join("\n")
           : implementationDate;
         setTextOrFallback("job-shoot-dates", shootDatesText, "-");
         setTextOrFallback("job-location", location, "-");
@@ -684,7 +807,9 @@
         setTextOrFallback("job-recruitment-number", formatRecruitmentDisplay(recruitmentNumber), "-");
         setTextOrFallback("job-description", description, "-");
         setTextOrFallback("job-shooting-format", shootingFormat, "-");
+        setTextOrFallback("job-media", media, "-");
         setTextOrFallback("job-makeup-support", makeupSupport, "-");
+        setTextOrFallback("job-makeup-image", makeupImage, "-");
         setTextOrFallback("job-outfit", outfit, "-");
         setTextOrFallback("job-belongings", belongings, "-");
         setTextOrFallback("job-usage-period", usagePeriod, "-");

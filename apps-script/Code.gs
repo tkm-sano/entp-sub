@@ -19,6 +19,8 @@ const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
+const DEFAULT_DEADLINE_NOTIFICATION_HOUR = 9;
+const DEFAULT_TALENT_SPREADSHEET_ID = "1wiLixuePcfzZpzzVcZ7ulUsVNkvLunzucoqK6DH4M9M";
 const JOB_ID_HEADER = "案件ID";
 const JOB_ID_PREFIX = "job-";
 const JOB_ID_FALLBACK_PREFIX = "job_tmp_";
@@ -419,46 +421,7 @@ function readUsers_() {
   }
 
   const users = runWithRetry_(function() {
-    const sheet = getTalentSheet_();
-    const values = sheet.getDataRange().getValues();
-
-    if (values.length < 2) {
-      return [];
-    }
-
-    const headers = values[0].map(h => String(h).trim());
-
-    const nameCol = findColumn_(headers, "名前");
-    const emailCol = findColumn_(
-      headers,
-      "email",
-      "メールアドレス",
-      "E-mail",
-      "Email",
-      "mail"
-    );
-    const pageUrlCol = findColumn_(headers, "個別ページURL", "page_url", "profile_url");
-
-    if (nameCol < 0) {
-      throw apiError_("config_error", "名前列不存在");
-    }
-
-    return values.slice(1).map(row => {
-      const rawName = String(row[nameCol] || "");
-      const normalizedName = normalizeName_(rawName);
-
-      if (!normalizedName) {
-        return null;
-      }
-
-      return {
-        uid: hash_(normalizedName),
-        name: rawName.trim(),
-        normalizedName,
-        email: emailCol >= 0 ? String(row[emailCol] || "").trim() : "",
-        pageUrl: pageUrlCol >= 0 ? String(row[pageUrlCol] || "").trim() : ""
-      };
-    }).filter(Boolean);
+    return readTalentUsersFromSheet_();
   }, DEFAULT_RETRY_COUNT, DEFAULT_RETRY_BASE_MS);
 
   try {
@@ -470,8 +433,51 @@ function readUsers_() {
   return users;
 }
 
+function readTalentUsersFromSheet_() {
+  const sheet = getTalentSheet_();
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length < 2) {
+    return [];
+  }
+
+  const headers = values[0].map(h => String(h).trim());
+
+  const nameCol = findColumn_(headers, "名前");
+  const emailCol = findColumn_(
+    headers,
+    "email",
+    "メールアドレス",
+    "E-mail",
+    "Email",
+    "mail"
+  );
+  const pageUrlCol = findColumn_(headers, "個別ページURL", "page_url", "profile_url");
+
+  if (nameCol < 0) {
+    throw apiError_("config_error", "名前列不存在");
+  }
+
+  return values.slice(1).map(row => {
+    const rawName = String(row[nameCol] || "");
+    const normalizedName = normalizeName_(rawName);
+
+    if (!normalizedName) {
+      return null;
+    }
+
+    return {
+      uid: hash_(normalizedName),
+      name: rawName.trim(),
+      normalizedName,
+      email: emailCol >= 0 ? String(row[emailCol] || "").trim() : "",
+      pageUrl: pageUrlCol >= 0 ? String(row[pageUrlCol] || "").trim() : ""
+    };
+  }).filter(Boolean);
+}
+
 function getTalentSheet_() {
-  const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
+  const id = getTalentSpreadsheetId_();
   const sheetName = getOptionalProperty_("TALENT_SHEET_NAME");
   const ss = SpreadsheetApp.openById(id);
 
@@ -834,7 +840,7 @@ function notifyDeadlinePassed() {
   const columns = getJobColumns_(headers);
   const applicantStore = getApplicantListStore_();
 
-  if (columns.title < 0 || columns.deadline < 0 || columns.email < 0) {
+  if (columns.title < 0 || columns.deadline < 0) {
     return;
   }
 
@@ -843,8 +849,8 @@ function notifyDeadlinePassed() {
   const pageUrlByName = {};
 
   users.forEach(user => {
-    if (user?.name) {
-      pageUrlByName[user.name] = String(user.pageUrl || "").trim();
+    if (user?.normalizedName) {
+      pageUrlByName[user.normalizedName] = String(user.pageUrl || "").trim();
     }
   });
 
@@ -857,10 +863,10 @@ function notifyDeadlinePassed() {
     const canonicalJobId = applicantRecord?.jobId || generatedId;
     const deadline = row[columns.deadline];
     const notified = applicantRecord?.deadlineNotifiedAt || "";
-    const clientEmail = String(row[columns.email] || "").trim();
+    const clientEmails = getNotificationEmailsFromRow_(row, displayRow, columns);
     const title = String(displayRow[columns.title] || row[columns.title] || "");
 
-    if (!deadline || notified || !clientEmail) {
+    if (!deadline || notified || clientEmails.length === 0) {
       return;
     }
 
@@ -869,11 +875,11 @@ function notifyDeadlinePassed() {
       return;
     }
 
-    const nextDay = new Date(deadlineDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    nextDay.setHours(0, 0, 0, 0);
+    const notifyAt = new Date(deadlineDate);
+    notifyAt.setDate(notifyAt.getDate() + 1);
+    notifyAt.setHours(getDeadlineNotificationHour_(), 0, 0, 0);
 
-    if (now < nextDay) {
+    if (now < notifyAt) {
       return;
     }
 
@@ -881,7 +887,7 @@ function notifyDeadlinePassed() {
     const names = splitLines_(applicantsText);
 
     const applicantLines = names.map(name => {
-      const url = pageUrlByName[name] || "（URLなし）";
+      const url = pageUrlByName[normalizeName_(name)] || "（URLなし）";
       return `・${name}\n  ${url}`;
     });
 
@@ -896,7 +902,7 @@ function notifyDeadlinePassed() {
       applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）"
     ].join("\n");
 
-    MailApp.sendEmail(clientEmail, subject, body);
+    MailApp.sendEmail(clientEmails.join(","), subject, body);
     upsertApplicantRecord_(applicantStore, {
       jobId: canonicalJobId,
       sourceKey,
@@ -1075,13 +1081,48 @@ function getJobColumns_(headers) {
     selection: find("選考方法", "selection_method"),
     deadline: find("締切日", "deadline", "締切"),
     emergencyContact: find("撮影当日の緊急連絡先", "緊急連絡先", "emergency_contact"),
-    email: find("client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール"),
+    email: find("ご担当者様のメールアドレス①", "担当者メールアドレス①", "client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール"),
+    email2: find("【任意】ご担当者様のメールアドレス②", "ご担当者様のメールアドレス②", "担当者メールアドレス②", "client_email_2"),
+    email3: find("【任意】ご担当者様のメールアドレス③", "ご担当者様のメールアドレス③", "担当者メールアドレス③", "client_email_3"),
     form: find("form_url"),
     category: find("category"),
     count: find("applicant_count"),
     notified: find("deadline_notified_at", "締切通知日時", "通知日時"),
     applicants: find("applicants", "応募者", "応募者名")
   };
+}
+
+function getNotificationEmailsFromRow_(row, displayRow, columns) {
+  const candidateCols = [columns.email, columns.email2, columns.email3].filter(col => col >= 0);
+  const emails = [];
+  const seen = {};
+
+  candidateCols.forEach((col) => {
+    const raw = String(colDisplay_(displayRow, col, "") || colValue_(row, col, "") || "").trim();
+    if (!raw) {
+      return;
+    }
+
+    raw
+      .split(/[\s,;、]+/)
+      .map(value => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((email) => {
+        if (!isValidEmail_(email)) {
+          return;
+        }
+
+        const key = email.toLowerCase();
+        if (seen[key]) {
+          return;
+        }
+
+        seen[key] = true;
+        emails.push(email);
+      });
+  });
+
+  return emails;
 }
 
 function getShootDatesFromRow_(row, displayRow, columns) {
@@ -1402,7 +1443,7 @@ function ensureJobImageFolder_(jobId) {
 }
 
 function getTalentUsersCacheKey_() {
-  const id = getOptionalProperty_("TALENT_SPREADSHEET_ID") || getProperty_("SPREADSHEET_ID");
+  const id = getTalentSpreadsheetId_();
   const sheetName = getOptionalProperty_("TALENT_SHEET_NAME") || "auto";
   return `${TALENT_USERS_CACHE_KEY}:${id}:${sheetName}`;
 }
@@ -1414,6 +1455,19 @@ function getTalentUsersCacheSeconds_() {
     return DEFAULT_TALENT_USERS_CACHE_SECONDS;
   }
   return Math.min(Math.floor(parsed), 21600);
+}
+
+function getDeadlineNotificationHour_() {
+  const raw = getOptionalProperty_("DEADLINE_NOTIFICATION_HOUR");
+  const parsed = Number(raw);
+  if (!raw || !Number.isFinite(parsed)) {
+    return DEFAULT_DEADLINE_NOTIFICATION_HOUR;
+  }
+  return Math.max(0, Math.min(23, Math.floor(parsed)));
+}
+
+function getTalentSpreadsheetId_() {
+  return DEFAULT_TALENT_SPREADSHEET_ID || getProperty_("SPREADSHEET_ID");
 }
 
 function findSheetWithHeader_(ss, headerName) {
