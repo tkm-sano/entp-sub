@@ -1069,27 +1069,25 @@ body[data-page="jobs"] .apply-button {
     justify-self: center;
   }
 
+  body[data-page="jobs"] .job-card__header,
   body[data-page="jobs"] .job-card__body {
     width: min(100%, 18.5rem);
     margin: 0 auto;
-    justify-content: center;
+  }
+
+  body[data-page="jobs"] .job-card__header,
+  body[data-page="jobs"] .job-card__body,
+  body[data-page="jobs"] .job-card__footer {
+    text-align: left;
   }
 
   body[data-page="jobs"] .job-card__body p {
-    text-align: center;
-  }
-
-  body[data-page="jobs"] .job-card__meta-item {
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  body[data-page="jobs"] .job-card__meta-value {
-    text-align: center;
+    text-align: left;
   }
 
   body[data-page="jobs"] .job-card__footer {
-    justify-content: center;
+    width: min(100%, 18.5rem);
+    margin: 0 auto;
   }
 }
 
