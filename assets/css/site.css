@@ -1058,6 +1058,41 @@ body[data-page="jobs"] .apply-button {
   padding: 0.55rem 1.3rem;
 }
 
+@media (min-width: 769px) {
+  body[data-page="jobs"] .jobs-list {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 340px));
+    justify-content: center;
+  }
+
+  body[data-page="jobs"] .job-card-link {
+    max-width: 340px;
+    justify-self: center;
+  }
+
+  body[data-page="jobs"] .job-card__body {
+    width: min(100%, 18.5rem);
+    margin: 0 auto;
+    justify-content: center;
+  }
+
+  body[data-page="jobs"] .job-card__body p {
+    text-align: center;
+  }
+
+  body[data-page="jobs"] .job-card__meta-item {
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  body[data-page="jobs"] .job-card__meta-value {
+    text-align: center;
+  }
+
+  body[data-page="jobs"] .job-card__footer {
+    justify-content: center;
+  }
+}
+
 @media (max-width: 480px) {
   body[data-page="jobs"] {
     font-size: 14px;
