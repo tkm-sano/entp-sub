@@ -4,6 +4,10 @@ title: 案件一覧
 page_id: jobs
 ---
 
+<script>
+  window.MENU_TALENT_JOBS = {{ site.data.jobs | jsonify }};
+</script>
+
 <section id="jobs-panel" class="jobs-shell">
   <div class="jobs-hero">
     <p class="jobs-hero__eyebrow">Open Casting Board</p>

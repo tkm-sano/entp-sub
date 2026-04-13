@@ -1,15 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
-  if (!window.MENU_TALENT_API_URL) {
-    console.error("env.js が読み込まれていないか、API URL が未設定です。");
-    alert("API設定が未完了です。`assets/js/env.js` を確認してください。");
-    return;
-  }
-
   const pageId = document.body?.dataset?.page || "default";
   const routes = window.MENU_TALENT_ROUTES || { login: "/", jobs: "/jobs/" };
-  const apiUrl = String(window.MENU_TALENT_API_URL || "").trim();
-  const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
-  const isConfigured = apiUrl && !apiUrl.startsWith("YOUR_");
+  const staticJobs = Array.isArray(window.MENU_TALENT_JOBS) ? window.MENU_TALENT_JOBS : [];
   const pageSize = 10;
 
   const loginEls = {
@@ -28,14 +20,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const state = { jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
-
-  if (!isConfigured) {
-    const text = "API設定が未完了です。`assets/js/env.js` の URL を設定してください。";
-    setLoginMessage(text, true);
-    setJobsMessage(text, true);
-    disableForm(loginEls.form);
-    return;
-  }
 
   // ------------------------------
   // ページ初期化
@@ -84,41 +68,10 @@ document.addEventListener("DOMContentLoaded", () => {
     window.location.href = url.pathname;
   }
 
-  function jsonpRequest(params, timeoutMs) {
-    return new Promise((resolve, reject) => {
-      const cbName = "menuTalentCb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
-      const script = document.createElement("script");
-
-      const timer = setTimeout(() => { cleanup(); reject(new Error("timeout")); }, timeoutMs);
-      function cleanup() { clearTimeout(timer); delete window[cbName]; if(script.parentNode) script.parentNode.removeChild(script); }
-
-      window[cbName] = function (data) { cleanup(); resolve(data); };
-      const qs = new URLSearchParams({ ...params, callback: cbName });
-      script.src = apiUrl + "?" + qs.toString();
-      script.onerror = () => { cleanup(); reject(new Error("script load error")); };
-      document.head.appendChild(script);
-    });
-  }
-
-  async function refreshJobs() {
-    setJobsMessage("読み込み中...", false);
-
-    try {
-      const data = await jsonpRequest({ action: "listJobs" }, apiTimeoutMs);
-
-      if (!data.ok) {
-        setJobsMessage(readableApiError(data), true);
-        return;
-      }
-
-      state.jobs = data.jobs || [];
-      setJobsMessage("", false);
-      renderJobs();
-
-    } catch (err) {
-      console.error(err);
-      setJobsMessage("通信エラーが発生しました。時間をおいて再度お試しください。", true);
-    }
+  function refreshJobs() {
+    state.jobs = staticJobs;
+    setJobsMessage("", false);
+    renderJobs();
   }
 
   function parseDeadlineDate(deadline) {
@@ -209,113 +162,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return raw;
   }
 
-  function extractDriveFileId(rawUrl) {
-    const raw = String(rawUrl || "").trim();
-    if (!raw) return "";
-
-    const m1 = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (m1 && m1[1]) return m1[1];
-
-    const m2 = raw.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (m2 && m2[1]) return m2[1];
-
-    const m3 = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (m3 && m3[1]) return m3[1];
-
-    return "";
-  }
-
-  function normalizeYouTubeEmbedUrl(rawUrl) {
-    const raw = String(rawUrl || "").trim();
-    if (!raw) return "";
-
-    const short = raw.match(/^https?:\/\/youtu\.be\/([a-zA-Z0-9_-]{6,})/i);
-    if (short && short[1]) {
-      return `https://www.youtube.com/embed/${short[1]}`;
-    }
-
-    const normal = raw.match(/[?&]v=([a-zA-Z0-9_-]{6,})/i);
-    if (normal && normal[1]) {
-      return `https://www.youtube.com/embed/${normal[1]}`;
-    }
-
-    const embed = raw.match(/^https?:\/\/(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/i);
-    if (embed && embed[1]) {
-      return `https://www.youtube.com/embed/${embed[1]}`;
-    }
-
-    return "";
-  }
-
-  function resolveCardMediaSource(job) {
-    const raw = pickFirst(
-      job.thumbnail_url,
-      job.eyecatch_image,
-      job.eyecatch_url,
-      job.eye_catch_image,
-      job.eye_catch_url,
-      job.image,
-      job.video_url,
-      job.movie_url,
-      job.video,
-      job.media_url,
-      job.media,
-      job.file_url,
-      job["画像"],
-      job["画像URL"],
-      job["動画"],
-      job["動画URL"],
-      job["画像・動画"],
-      job["画像・動画URL"]
-    );
-
-    const url = String(raw || "").trim();
-    if (!url) {
-      return { type: "none", url: "" };
-    }
-
-    const yt = normalizeYouTubeEmbedUrl(url);
-    if (yt) {
-      return { type: "iframe", url: yt };
-    }
-
-    if (/^https?:\/\/drive\.google\.com\//i.test(url)) {
-      const driveId = extractDriveFileId(url);
-      if (driveId) {
-        return { type: "iframe", url: `https://drive.google.com/file/d/${driveId}/preview` };
-      }
-    }
-
-    if (/\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(url)) {
-      return { type: "video", url };
-    }
-
-    if (/\.(png|jpe?g|gif|webp|avif|svg)(?:$|[?#])/i.test(url)) {
-      return { type: "image", url };
-    }
-
-    return { type: "image", url };
-  }
-
-  function renderCardMedia(job) {
-    const mediaSource = resolveCardMediaSource(job);
-    const alt = escapeHtml(String(job.title || "案件"));
-
-    if (mediaSource.type === "iframe") {
-      return `<div class="job-card__eyecatch"><iframe src="${escapeHtml(mediaSource.url)}" title="${alt}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`;
-    }
-
-    if (mediaSource.type === "video") {
-      return `<div class="job-card__eyecatch"><video src="${escapeHtml(mediaSource.url)}" muted playsinline preload="metadata"></video></div>`;
-    }
-
-    if (mediaSource.type === "image") {
-      return `<div class="job-card__eyecatch"><img src="${escapeHtml(mediaSource.url)}" alt="${alt}" loading="lazy" decoding="async"></div>`;
-    }
-
-    return `<div class="job-card__eyecatch job-card__eyecatch--placeholder"><span>NO IMAGE</span></div>`;
-  }
-
   function renderJobs() {
     if (!jobEls.jobsList) return;
 
@@ -400,14 +246,12 @@ document.addEventListener("DOMContentLoaded", () => {
           job["撮影エリア"]
         ) || "未設定"
       );
-      const eyeCatchHtml = renderCardMedia(job);
       const title = escapeHtml(String(job.title || job.name || "案件詳細"));
 
       // 「詳細ページ」リンクボタンに変更
       return `
-        <a class="job-card-link" href="${jobsBase}detail/?jobId=${encodedJobId}">
+        <a class="job-card-link" href="${jobsBase}${encodedJobId}/">
           <div class="job-card">
-            ${eyeCatchHtml}
             <div class="job-card__header">
               <div class="job-card__header-top">
                 <span class="job-card__category">${category}</span>
@@ -448,16 +292,8 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.message.style.color = isError ? "red" : "green";
   }
 
-  function disableForm(form) { form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = true); }
-  function enableForm(form) { form?.querySelectorAll("input, button, select, textarea").forEach(el => el.disabled = false); }
-
   function escapeHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-  function readableApiError(data) {
-    if (data.error) return data.error;
-    if (data.message) return data.message;
-    return "エラーが発生しました。";
   }
 });

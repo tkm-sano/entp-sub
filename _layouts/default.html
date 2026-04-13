@@ -9,10 +9,6 @@
     <link rel="canonical" href="{{ page.url | absolute_url }}" />
     <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}" />
 
-    <!-- 1. env.js を通常スクリプトとして読み込む -->
-    <script src="{{ '/assets/js/env.js' | relative_url }}"></script>
-
-    <!-- 2. ルート設定も env.js 読み込み後に実行 -->
     <script>
       window.MENU_TALENT_ROUTES = {
         login: "{{ '/' | relative_url }}",
@@ -20,7 +16,6 @@
       };
     </script>
 
-    <!-- 3. main.js を通常スクリプトで読み込む -->
     <script src="{{ '/assets/js/main.js' | relative_url }}"></script>
   </head>
 

@@ -1,9 +1,13 @@
+{% assign page_job = nil %}
+{% if page.job_id %}
+  {% assign page_job = site.data.jobs | where: "job_id", page.job_id | first %}
+{% endif %}
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>案件詳細</title>
+  <title>{% if page_job and page_job.title %}{{ page_job.title }}{% elsif page.title %}{{ page.title }}{% else %}案件詳細{% endif %}</title>
   <link rel="canonical" href="{{ page.url | absolute_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
   <script src="{{ '/assets/js/env.js' | relative_url }}"></script>
@@ -12,6 +16,10 @@
       login: "{{ '/' | relative_url }}",
       jobs: "{{ '/jobs/' | relative_url }}"
     };
+    window.MENU_TALENT_STATIC_JOB = {{ page_job | jsonify }};
+    {% unless page_job %}
+    window.MENU_TALENT_STATIC_JOBS = {{ site.data.jobs | jsonify }};
+    {% endunless %}
   </script>
 </head>
 <body data-page="job">
@@ -188,13 +196,10 @@
       const pageJobId = String((button?.dataset.jobId || secondaryApplyButton?.dataset.jobId || "")).trim();
       const queryJobId = new URLSearchParams(window.location.search).get("jobId") || "";
       const jobId = pageJobId || String(queryJobId).trim();
-      const apiUrl = window.MENU_TALENT_API_URL || "";
+      const staticJob = window.MENU_TALENT_STATIC_JOB || null;
+      const staticJobs = Array.isArray(window.MENU_TALENT_STATIC_JOBS) ? window.MENU_TALENT_STATIC_JOBS : [];
+      const applyApiUrl = String(window.MENU_TALENT_APPLY_API_URL || window.MENU_TALENT_API_URL || "").trim();
       const apiTimeoutMs = Number(window.MENU_TALENT_API_TIMEOUT_MS || 15000);
-
-      if (!apiUrl) {
-        alert("API設定が未完了です。env.js を確認してください。");
-        return;
-      }
 
       function jsonpRequest(params, timeoutMs) {
         return new Promise((resolve, reject) => {
@@ -204,7 +209,7 @@
           function cleanup() { clearTimeout(timer); delete window[cbName]; if(script.parentNode) script.parentNode.removeChild(script); }
           window[cbName] = (data) => { cleanup(); resolve(data); };
           const qs = new URLSearchParams({ ...params, callback: cbName });
-          script.src = apiUrl + "?" + qs.toString();
+          script.src = applyApiUrl + "?" + qs.toString();
           script.onerror = () => { cleanup(); reject(new Error("script load error")); };
           document.head.appendChild(script);
         });
@@ -662,44 +667,27 @@
 
       }
 
-      async function loadJobDetail() {
-        if (!jobId) { alert("案件IDが見つかりません。"); return; }
-
-        try {
-          let job = null;
-
-          // 優先: 単一案件APIで転送量を削減して表示を高速化
-          const singleData = await jsonpRequest(
-            { action: "getJob", jobId },
-            apiTimeoutMs
-          );
-
-          if (singleData?.ok && singleData.job) {
-            job = singleData.job;
-          } else if (String(singleData?.errorCode || "") === "invalid_action") {
-            // API未反映時の互換フォールバック
-            const listData = await jsonpRequest({ action: "listJobs" }, apiTimeoutMs);
-            if (!listData.ok) {
-              alert(readableApiError(listData));
-              return;
-            }
-            const jobs = Array.isArray(listData.jobs) ? listData.jobs : [];
-            job = jobs.find((item) => String(item.job_id || item.id || "") === String(jobId)) || null;
-          } else {
-            alert(readableApiError(singleData));
-            return;
-          }
-
-          if (!job) {
-            alert("案件が見つかりませんでした。");
-            return;
-          }
-
-          renderJob(job);
-        } catch (err) {
-          console.error(err);
-          alert("通信エラーが発生しました。時間をおいて再度お試しください。");
+      function getStaticJobDetail() {
+        if (staticJob && String(staticJob.job_id || staticJob.id || "") === String(jobId)) {
+          return staticJob;
         }
+
+        if (!jobId) {
+          return null;
+        }
+
+        return staticJobs.find((item) => String(item.job_id || item.id || "") === String(jobId)) || null;
+      }
+
+      function loadJobDetail() {
+        const job = getStaticJobDetail();
+
+        if (!job) {
+          alert("案件が見つかりませんでした。");
+          return;
+        }
+
+        renderJob(job);
       }
 
       loadJobDetail();
@@ -720,6 +708,7 @@
 
       confirmApplyButton?.addEventListener("click", async () => {
         if (!hasRequiredConsents()) { alert("キャンセルポリシーの確認が必要です。"); return; }
+        if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }
 
         const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
         if (!applicantName) { alert("応募者名を入力してください。"); return; }
