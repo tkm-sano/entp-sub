@@ -1,52 +1,4 @@
-[ 
-  {
-    "job_id": "job_1",
-    "title": "Sample Job 1",
-    "category": "Sample",
-    "client_name": "Sample Client",
-    "client_email": "client1@example.com",
-    "shoot_description": "Catalog shoot for spring collection",
-    "concept": "Bright, clean, and minimal styling",
-    "candidate_shoot_dates": "2026-03-10 or 2026-03-12",
-    "duration_hours": "4時間",
-    "shoot_location": "Tokyo (studio)",
-    "media_usage": "Web, social",
-    "usage_period": "6 months",
-    "competition_presence": "No direct competitor on same day",
-    "fee": "JPY 30,000",
-    "hourly_wage": 7500,
-    "items_to_bring": "Makeup kit, basic wardrobe",
-    "max_applicants": 3,
-    "applicant_count": 0,
-    "deadline": "2026-03-31",
-    "form_url": "https://example.com/apply/job1",
-    "deadline_notified_at": "",
-    "applicants": "[]"
-  },
-  {
-    "job_id": "job_2",
-    "title": "Sample Job 2",
-    "category": "Sample",
-    "client_name": "Sample Client 2",
-    "client_email": "client2@example.com",
-    "shoot_description": "Brand video short cut",
-    "concept": "Natural, candid lifestyle",
-    "candidate_shoot_dates": "2026-04-01",
-    "duration_hours": "6時間",
-    "shoot_location": "Osaka (on location)",
-    "media_usage": "TV, web",
-    "usage_period": "12 months",
-    "competition_presence": "Must avoid competing brand for 3 months",
-    "fee": "JPY 50,000",
-    "hourly_wage": 8333,
-    "items_to_bring": "Comfortable shoes",
-    "max_applicants": 5,
-    "applicant_count": 1,
-    "deadline": "2026-04-15",
-    "form_url": "https://example.com/apply/job2",
-    "deadline_notified_at": "",
-    "applicants": "[]"
-  },
+[
   {
     "job_id": "job_3",
     "title": "夏の新作飲料WebCM",
@@ -71,4 +23,3 @@
     "applicants": "[]"
   }
 ]
-
