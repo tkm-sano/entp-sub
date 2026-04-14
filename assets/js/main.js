@@ -334,8 +334,21 @@ document.addEventListener("DOMContentLoaded", () => {
     return normalized;
   }
 
+  function decodeThumbnailSegment(value) {
+    const text = String(value || "");
+    if (!text) {
+      return "";
+    }
+
+    try {
+      return decodeURIComponent(text);
+    } catch (error) {
+      return text;
+    }
+  }
+
   function tokenizeThumbnailName(value) {
-    return String(value || "")
+    return decodeThumbnailSegment(value)
       .normalize("NFKC")
       .toLowerCase()
       .replace(/\.[^.]+$/, "")
@@ -347,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function getThumbnailFolderName(file) {
     const path = String(file?.path || "").split("?")[0];
     const segments = path.split("/").filter(Boolean);
-    return segments.length >= 2 ? segments[segments.length - 2] : "";
+    return segments.length >= 2 ? decodeThumbnailSegment(segments[segments.length - 2]) : "";
   }
 
   function tokenizeThumbnailFolderName(value) {
@@ -379,8 +392,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function calculateKeywordScore(searchText, value, exactWeight = 3) {
-    const normalizedValue = normalizeThumbnailKey(value);
-    const tokens = tokenizeThumbnailName(value);
+    const decodedValue = decodeThumbnailSegment(value);
+    const normalizedValue = normalizeThumbnailKey(decodedValue);
+    const tokens = tokenizeThumbnailName(decodedValue);
     let score = 0;
 
     if (normalizedValue && searchText.includes(normalizedValue)) {
@@ -390,6 +404,17 @@ document.addEventListener("DOMContentLoaded", () => {
     tokens.forEach((token) => {
       if (searchText.includes(token)) {
         score += token.length;
+        return;
+      }
+
+      for (let size = Math.min(token.length - 1, 8); size >= 2; size -= 1) {
+        const prefix = token.slice(0, size);
+        const suffix = token.slice(-size);
+
+        if (searchText.includes(prefix) || searchText.includes(suffix)) {
+          score += size;
+          break;
+        }
       }
     });
 
@@ -592,7 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const thumbnailUrl = resolveThumbnailUrl(job);
       const thumbnailMarkup = thumbnailUrl
         ? `<div class="job-card__thumb"><img src="${escapeHtml(thumbnailUrl)}" alt="${title} のサムネイル" loading="lazy"></div>`
-        : "";
+        : `<div class="job-card__thumb job-card__thumb--empty" aria-hidden="true"></div>`;
 
       return `
         <a class="job-card-link" href="${jobsBase}${encodedJobId}/">

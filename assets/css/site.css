@@ -947,6 +947,10 @@ body[data-page="jobs"] .job-card__thumb {
   border-bottom: 1px solid #e8eef5;
 }
 
+body[data-page="jobs"] .job-card__thumb--empty {
+  background: #fbfcfd;
+}
+
 body[data-page="jobs"] .job-card__thumb img {
   width: 100%;
   height: 100%;
