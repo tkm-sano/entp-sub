@@ -458,11 +458,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return "";
     }
 
-    const searchText = buildThumbnailSearchText(job);
-    if (!searchText) {
-      return "";
-    }
-
     const grouped = thumbnailFiles.reduce((map, file) => {
       const folderName = getThumbnailFolderName(file);
       if (!folderName) {
@@ -477,15 +472,20 @@ document.addEventListener("DOMContentLoaded", () => {
       return map;
     }, new Map());
 
+    const searchText = buildThumbnailSearchText(job);
     let bestGroup = null;
     let bestScore = 0;
     let fallbackGroup = null;
 
     grouped.forEach((files, folderName) => {
-      let score = calculateKeywordScore(searchText, folderName, 3);
-
       if (/当てはまらない/.test(folderName)) {
         fallbackGroup = files;
+        return;
+      }
+
+      const score = calculateKeywordScore(searchText, folderName, 3);
+      if (!searchText || score <= 0) {
+        return;
       }
 
       if (score > bestScore) {
@@ -494,8 +494,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    const resolvedGroup = bestGroup || fallbackGroup;
     const selected = selectThumbnailFromGroup(
-      bestGroup || fallbackGroup,
+      resolvedGroup,
       pickFirst(job.job_id, job.id, job.title, job.name, searchText),
       searchText
     );
