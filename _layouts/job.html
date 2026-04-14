@@ -248,7 +248,20 @@
         }
       }
 
+      function shouldPreferJsonp(url) {
+        return /https:\/\/script\.google\.com\/macros\//.test(String(url || "").trim());
+      }
+
       async function requestApply(payload, timeoutMs) {
+        if (shouldPreferJsonp(applyApiUrl)) {
+          try {
+            return await jsonpRequest(payload, timeoutMs);
+          } catch (err) {
+            console.warn("JSONP apply failed, falling back to POST", err);
+            return postJsonRequest(payload, timeoutMs);
+          }
+        }
+
         try {
           return await postJsonRequest(payload, timeoutMs);
         } catch (err) {
