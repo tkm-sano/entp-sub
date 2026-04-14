@@ -1729,6 +1729,11 @@ body[data-page="job"] {
   color: #1f2d3d;
 }
 
+.job-consent__attention {
+  color: #c62828;
+  font-weight: 700;
+}
+
 .job-consent input[type="checkbox"] {
   margin-top: 2px;
   width: 16px;
