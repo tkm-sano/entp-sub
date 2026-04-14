@@ -288,6 +288,35 @@ document.addEventListener("DOMContentLoaded", () => {
     return raw;
   }
 
+  function resolveThumbnailUrl(job) {
+    const getValue = createJobValueResolver(job);
+    const url = String(
+      pickFirst(
+        getValue(
+          "thumbnail_url",
+          "thumbnailUrl",
+          "thumbnail",
+          "thumbnail_image",
+          "eyecatch_image",
+          "eyecatch_url",
+          "eye_catch_image",
+          "eye_catch_url",
+          "image",
+          "画像",
+          "画像URL",
+          "サムネイル",
+          "サムネイルURL",
+          "サムネイル画像",
+          "サムネイル画像URL",
+          "アイキャッチ画像",
+          "アイキャッチ画像URL"
+        )
+      )
+    ).trim();
+
+    return /^(https?:\/\/|\/)/i.test(url) ? url : "";
+  }
+
   function renderJobs() {
     if (!jobEls.jobsList) return;
 
@@ -399,11 +428,15 @@ document.addEventListener("DOMContentLoaded", () => {
           "案件詳細"
         )
       ));
+      const thumbnailUrl = resolveThumbnailUrl(job);
+      const thumbnailMarkup = thumbnailUrl
+        ? `<div class="job-card__thumb"><img src="${escapeHtml(thumbnailUrl)}" alt="${title} のサムネイル" loading="lazy"></div>`
+        : "";
 
-      // 「詳細ページ」リンクボタンに変更
       return `
         <a class="job-card-link" href="${jobsBase}${encodedJobId}/">
           <div class="job-card">
+            ${thumbnailMarkup}
             <div class="job-card__header">
               <div class="job-card__header-top">
                 <span class="job-card__category">${category}</span>
