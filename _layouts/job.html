@@ -222,6 +222,41 @@
         });
       }
 
+      async function postJsonRequest(payload, timeoutMs) {
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timer = window.setTimeout(() => {
+          if (controller) controller.abort();
+        }, timeoutMs);
+
+        try {
+          const response = await fetch(applyApiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload),
+            signal: controller ? controller.signal : undefined
+          });
+
+          if (!response.ok) {
+            throw new Error("http_" + response.status);
+          }
+
+          return await response.json();
+        } finally {
+          window.clearTimeout(timer);
+        }
+      }
+
+      async function requestApply(payload, timeoutMs) {
+        try {
+          return await postJsonRequest(payload, timeoutMs);
+        } catch (err) {
+          console.warn("POST apply failed, falling back to JSONP", err);
+          return jsonpRequest(payload, timeoutMs);
+        }
+      }
+
       function readableApiError(response) {
         const code = String(response?.errorCode || response?.code || "");
         if (code === "already_applied") return "この案件には既に応募済みです。";
@@ -879,7 +914,7 @@
             acceptedShootDates: "true"
           };
 
-          const data = await jsonpRequest(payload, apiTimeoutMs);
+          const data = await requestApply(payload, apiTimeoutMs);
 
           if (!data.ok) {
             alert(readableApiError(data));
