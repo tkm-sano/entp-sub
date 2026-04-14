@@ -765,7 +765,6 @@ function apply_(params) {
     const sheetRowNumber = rowIndex + 1;
 
     const deadline = columns.deadline >= 0 ? row[columns.deadline] : "";
-    const max = normalizeNumber_(columns.max >= 0 ? row[columns.max] : 0);
     const title = String(displayRow[columns.title] || row[columns.title] || "");
     const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
     const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
@@ -782,10 +781,6 @@ function apply_(params) {
 
     if (isDeadlinePassed_(deadline)) {
       throw apiError_("deadline_passed", "応募締切を過ぎています");
-    }
-
-    if (max > 0 && currentCount >= max) {
-      throw apiError_("quota_full", "定員に達しています");
     }
 
     if (applicantsList.includes(applicantName)) {
