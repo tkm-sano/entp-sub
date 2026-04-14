@@ -21,6 +21,8 @@ const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
 const DEFAULT_DEADLINE_NOTIFICATION_HOUR = 9;
 const DEFAULT_TALENT_SPREADSHEET_ID = "1wiLixuePcfzZpzzVcZ7ulUsVNkvLunzucoqK6DH4M9M";
+const CLIENT_NOTIFICATION_CC = "kaito.suzuki@missconnect.jp";
+const MAIL_SENDER_NAME = "MissConnect";
 const JOB_ID_HEADER = "案件ID";
 const JOB_ID_PREFIX = "job-";
 const JOB_ID_FALLBACK_PREFIX = "job_tmp_";
@@ -882,7 +884,7 @@ function sendConfirmationEmail_(to, name, details) {
     "MissConnect"
   ].join("\n");
 
-  MailApp.sendEmail(to, subject, body);
+  sendMail_(to, subject, body);
 }
 
 /* =========================================
@@ -1098,7 +1100,9 @@ function sendModelSelectionResultEmail_(to, name, details) {
         "MissConnect"
       ].join("\n");
 
-  MailApp.sendEmail(to, subject, body);
+  sendMail_(to, subject, body, {
+    cc: CLIENT_NOTIFICATION_CC
+  });
 }
 
 function onModelDecisionFormSubmit_(e) {
@@ -1316,7 +1320,9 @@ function notifyDeadlinePassed() {
       "MissConnect"
     ].join("\n");
 
-    MailApp.sendEmail(clientEmails.join(","), subject, body);
+    sendMail_(clientEmails.join(","), subject, body, {
+      cc: CLIENT_NOTIFICATION_CC
+    });
     upsertApplicantRecord_(applicantStore, {
       jobId: canonicalJobId,
       sourceKey,
@@ -2250,6 +2256,14 @@ function apiError_(code, message) {
   const e = new Error(message);
   e.code = code;
   return e;
+}
+
+function sendMail_(to, subject, body, options) {
+  const mailOptions = Object.assign({
+    name: MAIL_SENDER_NAME
+  }, options || {});
+
+  MailApp.sendEmail(to, subject, body, mailOptions);
 }
 
 function hash_(text) {
