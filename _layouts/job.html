@@ -29,6 +29,7 @@
         <div class="job-hero__panel">
           <div class="job-header-tags">
             <span id="job-kicker" class="job-chip job-chip--primary">案件情報</span>
+            <span id="job-audience-chip" class="job-chip job-chip--audience">男女両方募集</span>
             <span id="job-hero-remaining" class="job-chip job-chip--neutral">未定</span>
           </div>
           <h1 id="job-title">案件詳細を読み込み中...</h1>
@@ -179,6 +180,10 @@
             <input type="checkbox" id="modal-consent-shoot-dates">
             <span>撮影候補日を確認し、参加可能な日程が1日以上あることを確認しました</span>
           </label>
+          <label class="job-consent hidden" id="modal-consent-audience-label">
+            <input type="checkbox" id="modal-consent-audience">
+            <span id="modal-consent-audience-text">この案件の対象を確認しました</span>
+          </label>
         </div>
         <div class="apply-confirm-modal__actions">
           <button type="button" id="cancel-apply-confirm" class="details-button">戻る</button>
@@ -195,10 +200,14 @@
       const modal = document.getElementById("apply-confirm-modal");
       const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
       const modalShootDatesCheckbox = document.getElementById("modal-consent-shoot-dates");
+      const modalAudienceCheckbox = document.getElementById("modal-consent-audience");
+      const modalAudienceConsentLabel = document.getElementById("modal-consent-audience-label");
+      const modalAudienceConsentText = document.getElementById("modal-consent-audience-text");
       const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
       const confirmApplyButton = document.getElementById("confirm-apply-button");
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
       if (!applyButtons.length) return;
+      let audienceConsentRequired = false;
 
       const pageJobId = String((button?.dataset.jobId || secondaryApplyButton?.dataset.jobId || "")).trim();
       const queryJobId = new URLSearchParams(window.location.search).get("jobId") || "";
@@ -281,8 +290,103 @@
         return String(response?.message || "処理に失敗しました。");
       }
 
+      function normalizeAudienceValue(value) {
+        const normalized = String(value || "")
+          .normalize("NFKC")
+          .toLowerCase()
+          .replace(/\s+/g, "");
+
+        if (!normalized) {
+          return "";
+        }
+
+        const includesAny = (keywords) => keywords.some((keyword) => normalized.includes(keyword));
+        const mentionsAll = includesAny(["男女両方", "男女どちらも", "男女不問", "性別不問", "男女問わず", "性別問わず", "ユニセックス", "共通", "allgender", "all"]);
+        const mentionsFemale = includesAny(["女性", "female", "women", "woman", "ladies", "lady", "レディース", "レディス", "girls", "girl", "miss", "ミス"]);
+        const mentionsMale = includesAny(["男性", "male", "men", "man", "gentleman", "gentlemen", "mister", "ミスター", "メンズ", "boys", "boy"]);
+
+        if (mentionsAll || (mentionsFemale && mentionsMale)) {
+          return "all";
+        }
+        if (mentionsFemale) {
+          return "miss";
+        }
+        if (mentionsMale) {
+          return "mister";
+        }
+
+        return "";
+      }
+
+      function resolveJobAudience(getValue) {
+        const explicitAudience = normalizeAudienceValue(
+          getValue(
+            "audience",
+            "target_audience",
+            "casting_target",
+            "target_gender",
+            "gender_target",
+            "gender",
+            "性別",
+            "対象性別",
+            "募集対象",
+            "対象",
+            "対象モデル",
+            "出演者区分",
+            "モデル区分"
+          )
+        );
+
+        if (explicitAudience) {
+          return explicitAudience;
+        }
+
+        return normalizeAudienceValue([
+          getValue("requirements", "qualifications", "conditions", "応募条件", "条件"),
+          getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル"),
+          getValue("description", "details", "shoot_description", "shooting_content", "案件説明")
+        ].join(" ")) || "all";
+      }
+
+      function getAudienceLabel(audience) {
+        if (audience === "miss") {
+          return "女性募集";
+        }
+        if (audience === "mister") {
+          return "男性募集";
+        }
+        return "男女両方募集";
+      }
+
+      function updateAudienceConsent(job, getValue) {
+        if (!modalAudienceCheckbox || !modalAudienceConsentLabel || !modalAudienceConsentText) {
+          return;
+        }
+
+        const audience = resolveJobAudience(getValue);
+
+        audienceConsentRequired = audience === "miss" || audience === "mister";
+        modalAudienceCheckbox.checked = false;
+
+        if (!audienceConsentRequired) {
+          modalAudienceConsentLabel.classList.add("hidden");
+          modalAudienceConsentText.textContent = "この案件の対象を確認しました";
+          return;
+        }
+
+        modalAudienceConsentLabel.classList.remove("hidden");
+        modalAudienceConsentText.textContent = audience === "miss"
+          ? "この案件が女性向けであることを確認しました"
+          : "この案件が男性向けであることを確認しました";
+      }
+
       function hasRequiredConsents() {
-        return Boolean(modalCancelPolicyCheckbox?.checked) && Boolean(modalShootDatesCheckbox?.checked);
+        const hasBaseConsents = Boolean(modalCancelPolicyCheckbox?.checked) && Boolean(modalShootDatesCheckbox?.checked);
+        if (!hasBaseConsents) {
+          return false;
+        }
+
+        return !audienceConsentRequired || Boolean(modalAudienceCheckbox?.checked);
       }
 
       function openConfirmModal() {
@@ -293,6 +397,20 @@
       function closeConfirmModal() {
         if (!modal) return;
         modal.classList.add("hidden");
+      }
+
+      function setConfirmApplySubmittingState(isSubmitting) {
+        if (!confirmApplyButton) return;
+
+        if (!confirmApplyButton.dataset.defaultLabel) {
+          confirmApplyButton.dataset.defaultLabel = confirmApplyButton.textContent || "応募確定に進む";
+        }
+
+        confirmApplyButton.disabled = isSubmitting;
+        confirmApplyButton.classList.toggle("is-submitting", isSubmitting);
+        confirmApplyButton.textContent = isSubmitting
+          ? "応募送信中..."
+          : confirmApplyButton.dataset.defaultLabel;
       }
 
       function setText(id, value) {
@@ -810,14 +928,18 @@
         const remainingSource = pickFirst(getValue("remaining", "残り日数"), getValue("deadline", "締切日", "締切"));
         const remainingDays = calculateRemainingDays(remainingSource);
         const remainingBadge = document.getElementById("job-hero-remaining");
+        const audienceChip = document.getElementById("job-audience-chip");
         const resolvedTitle = pickFirst(
           getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル"),
           "案件詳細"
         );
+        const audience = resolveJobAudience(getValue);
         const category = pickFirst(getValue("category", "カテゴリ"), media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
+        updateAudienceConsent(job, getValue);
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "案件情報");
+        setTextOrFallback("job-audience-chip", getAudienceLabel(audience), "男女両方募集");
         setTextOrFallback("job-hero-reward", totalReward, "-");
         setTextOrFallback("job-hero-date", implementationDate, "-");
         setTextOrFallback("job-hero-location", location, "-");
@@ -834,6 +956,17 @@
           } else {
             remainingBadge.classList.add("job-chip--neutral");
           }
+        }
+
+        if (audienceChip) {
+          audienceChip.classList.remove("job-chip--audience-miss", "job-chip--audience-mister", "job-chip--audience-all");
+          audienceChip.classList.add(
+            audience === "miss"
+              ? "job-chip--audience-miss"
+              : audience === "mister"
+                ? "job-chip--audience-mister"
+                : "job-chip--audience-all"
+          );
         }
 
         // 詳細セクション表示
@@ -905,7 +1038,8 @@
       });
 
       confirmApplyButton?.addEventListener("click", async () => {
-        if (!hasRequiredConsents()) { alert("キャンセルポリシーと撮影候補日の確認が必要です。"); return; }
+        if (confirmApplyButton.disabled) return;
+        if (!hasRequiredConsents()) { alert("キャンセルポリシー・撮影候補日・案件対象の確認が必要です。"); return; }
         if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }
 
         const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
@@ -915,7 +1049,7 @@
         if (!contactEmail || !contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
 
-        confirmApplyButton.disabled = true;
+        setConfirmApplySubmittingState(true);
 
         try {
           const payload = {
@@ -931,7 +1065,7 @@
 
           if (!data.ok) {
             alert(readableApiError(data));
-            confirmApplyButton.disabled = false;
+            setConfirmApplySubmittingState(false);
             return;
           }
 
@@ -939,7 +1073,8 @@
           closeConfirmModal();
           modalCancelPolicyCheckbox.checked = false;
           modalShootDatesCheckbox.checked = false;
-          confirmApplyButton.disabled = false;
+          if (modalAudienceCheckbox) modalAudienceCheckbox.checked = false;
+          setConfirmApplySubmittingState(false);
 
           // 最新の案件情報を再取得して応募者リストを更新
           await loadJobDetail();
@@ -947,7 +1082,7 @@
         } catch (err) {
           console.error(err);
           alert("通信エラーが発生しました。時間をおいて再度お試しください。");
-          confirmApplyButton.disabled = false;
+          setConfirmApplySubmittingState(false);
         }
       });
     });

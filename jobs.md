@@ -16,6 +16,11 @@ page_id: jobs
       <p class="jobs-subtitle">撮影内容と条件を比較しながら、気になる案件をすぐ確認できます。</p>
       <p id="jobs-count" class="jobs-count"></p>
     </div>
+    <div class="jobs-audience-switch" role="group" aria-label="案件の表示対象">
+      <button type="button" class="jobs-audience-switch__button is-active" data-audience-filter="all" aria-pressed="true">男女両方</button>
+      <button type="button" class="jobs-audience-switch__button" data-audience-filter="miss" aria-pressed="false">女性向け</button>
+      <button type="button" class="jobs-audience-switch__button" data-audience-filter="mister" aria-pressed="false">男性向け</button>
+    </div>
   </div>
 
   <div class="jobs-toolbar">

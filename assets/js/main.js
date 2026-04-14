@@ -17,10 +17,11 @@ document.addEventListener("DOMContentLoaded", () => {
     message: document.getElementById("jobs-message"),
     searchInput: document.getElementById("search-input"),
     searchButton: document.getElementById("search-button"),
-    wageRangeFilter: document.getElementById("wage-range-filter")
+    wageRangeFilter: document.getElementById("wage-range-filter"),
+    audienceButtons: Array.from(document.querySelectorAll("[data-audience-filter]"))
   };
 
-  const state = { jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
+  const state = { jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "", audienceFilter: "all" };
   const thumbnailRandomCache = new Map();
 
   // ------------------------------
@@ -44,6 +45,18 @@ document.addEventListener("DOMContentLoaded", () => {
     jobEls.searchButton?.addEventListener("click", resetToFirstPage);
     jobEls.wageRangeFilter?.addEventListener("change", resetToFirstPage);
     jobEls.nextButton?.addEventListener("click", onNextPage);
+    jobEls.audienceButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextFilter = String(button.dataset.audienceFilter || "all").trim() || "all";
+        if (state.audienceFilter === nextFilter) {
+          return;
+        }
+
+        state.audienceFilter = nextFilter;
+        syncAudienceButtons();
+        resetToFirstPage();
+      });
+    });
   }
 
   function resetToFirstPage() {
@@ -72,8 +85,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function refreshJobs() {
     state.jobs = staticJobs;
+    syncAudienceButtons();
     setJobsMessage("", false);
     renderJobs();
+  }
+
+  function syncAudienceButtons() {
+    jobEls.audienceButtons.forEach((button) => {
+      const isActive = String(button.dataset.audienceFilter || "") === state.audienceFilter;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
   }
 
   function parseDeadlineDate(deadline) {
@@ -391,6 +413,46 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/\s+/g, "");
   }
 
+  function buildThumbnailTitleText(job) {
+    const getValue = createJobValueResolver(job);
+    return String(
+      pickFirst(
+        getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル")
+      )
+    )
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/\s+/g, "");
+  }
+
+  function normalizeAudienceValue(value) {
+    const normalized = String(value || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/\s+/g, "");
+
+    if (!normalized) {
+      return "";
+    }
+
+    const includesAny = (keywords) => keywords.some((keyword) => normalized.includes(keyword));
+    const mentionsAll = includesAny(["男女両方", "男女どちらも", "男女不問", "性別不問", "男女問わず", "性別問わず", "ユニセックス", "共通", "allgender", "all"]);
+    const mentionsFemale = includesAny(["女性", "female", "women", "woman", "ladies", "lady", "レディース", "レディス", "girls", "girl", "miss", "ミス"]);
+    const mentionsMale = includesAny(["男性", "male", "men", "man", "gentleman", "gentlemen", "mister", "ミスター", "メンズ", "boys", "boy"]);
+
+    if (mentionsAll || (mentionsFemale && mentionsMale)) {
+      return "all";
+    }
+    if (mentionsFemale) {
+      return "miss";
+    }
+    if (mentionsMale) {
+      return "mister";
+    }
+
+    return "";
+  }
+
   function calculateKeywordScore(searchText, value, exactWeight = 3) {
     const decodedValue = decodeThumbnailSegment(value);
     const normalizedValue = normalizeThumbnailKey(decodedValue);
@@ -421,7 +483,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return score;
   }
 
-  function selectThumbnailFromGroup(files, seedSource, searchText) {
+  function calculateTitleMatchBonus(titleText, value, bonus = 10) {
+    if (!titleText) {
+      return 0;
+    }
+
+    return calculateKeywordScore(titleText, value, 4) > 0 ? bonus : 0;
+  }
+
+  function selectThumbnailFromGroup(files, seedSource, searchText, titleText) {
     if (!Array.isArray(files) || !files.length) {
       return null;
     }
@@ -431,7 +501,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let bestScore = -1;
 
       files.forEach((file) => {
-        const score = calculateKeywordScore(searchText, file?.basename || "", 4);
+        const score = calculateKeywordScore(searchText, file?.basename || "", 4)
+          + calculateTitleMatchBonus(titleText, file?.basename || "");
         if (score > bestScore) {
           bestScore = score;
           bestFile = file;
@@ -473,6 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, new Map());
 
     const searchText = buildThumbnailSearchText(job);
+    const titleText = buildThumbnailTitleText(job);
     let bestGroup = null;
     let bestScore = 0;
     let fallbackGroup = null;
@@ -483,7 +555,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const score = calculateKeywordScore(searchText, folderName, 3);
+      const score = calculateKeywordScore(searchText, folderName, 3)
+        + calculateTitleMatchBonus(titleText, folderName);
       if (!searchText || score <= 0) {
         return;
       }
@@ -498,10 +571,66 @@ document.addEventListener("DOMContentLoaded", () => {
     const selected = selectThumbnailFromGroup(
       resolvedGroup,
       pickFirst(job.job_id, job.id, job.title, job.name, searchText),
-      searchText
+      searchText,
+      titleText
     );
 
     return String(selected?.path || "").trim();
+  }
+
+  function getJobAudience(job) {
+    const getValue = createJobValueResolver(job);
+    const explicitAudience = normalizeAudienceValue(
+      getValue(
+        "audience",
+        "target_audience",
+        "casting_target",
+        "target_gender",
+        "gender_target",
+        "gender",
+        "性別",
+        "対象性別",
+        "募集対象",
+        "対象",
+        "対象モデル",
+        "出演者区分",
+        "モデル区分"
+      )
+    );
+    if (explicitAudience) {
+      return explicitAudience;
+    }
+
+    const audienceSource = [
+      getValue("requirements", "qualifications", "conditions", "応募条件", "条件"),
+      getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル"),
+      getValue("description", "details", "shoot_description", "shooting_content", "案件説明")
+    ]
+      .flat()
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .join(" ");
+
+    return normalizeAudienceValue(audienceSource) || "all";
+  }
+
+  function matchesAudienceFilter(job, filter) {
+    if (!filter || filter === "all") {
+      return true;
+    }
+
+    const audience = getJobAudience(job);
+    return audience === "all" || audience === filter;
+  }
+
+  function getAudienceLabel(audience) {
+    if (audience === "miss") {
+      return "女性募集";
+    }
+    if (audience === "mister") {
+      return "男性募集";
+    }
+    return "男女両方募集";
   }
 
   function renderJobs() {
@@ -509,9 +638,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const keyword  = (state.appliedKeyword || "").trim().toLowerCase();
     const wageRange = jobEls.wageRangeFilter?.value || "";
+    const audienceFilter = state.audienceFilter || "all";
 
     const filtered = state.jobs.filter(job => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
+      if (!matchesAudienceFilter(job, audienceFilter)) return false;
 
       const getValue = createJobValueResolver(job);
       const deadlineValue = getValue("deadline", "締切日", "締切");
@@ -577,6 +708,7 @@ document.addEventListener("DOMContentLoaded", () => {
           "Casting"
         )
       ).trim());
+      const audienceLabel = escapeHtml(getAudienceLabel(getJobAudience(job)));
       const rawJobId = String(pickFirst(getValue("job_id", "id", "案件ID"), job.job_id, job.id)).trim();
       const encodedJobId = encodeURIComponent(rawJobId);
       const jobsBase = String(routes.jobs || "/jobs/").replace(/\/+$/, "") + "/";
@@ -626,7 +758,10 @@ document.addEventListener("DOMContentLoaded", () => {
             ${thumbnailMarkup}
             <div class="job-card__header">
               <div class="job-card__header-top">
-                <span class="job-card__category">${category}</span>
+                <div class="job-card__header-tags">
+                  <span class="job-card__category">${category}</span>
+                  <span class="job-card__audience">${audienceLabel}</span>
+                </div>
                 <span class="job-card__remaining">${escapeHtml(remainingDays)}</span>
               </div>
               <h3 class="job-card__title">${title}</h3>

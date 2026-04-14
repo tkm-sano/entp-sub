@@ -494,6 +494,19 @@ body[data-page="login"] .system-message {
   opacity: 0.5;
 }
 
+.apply-button.is-submitting,
+.apply-button.is-submitting:hover,
+.apply-button.is-submitting:disabled,
+.apply-button.is-submitting:disabled:hover {
+  background: var(--brand);
+  color: #fff;
+  opacity: 1;
+}
+
+.apply-button.is-submitting:disabled {
+  cursor: progress;
+}
+
 .jobs-pagination {
   margin-top: 1rem;
   display: flex;
@@ -876,6 +889,39 @@ body[data-page="jobs"] .jobs-count {
   font-weight: 700;
 }
 
+body[data-page="jobs"] .jobs-audience-switch {
+  margin-top: 16px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+body[data-page="jobs"] .jobs-audience-switch__button {
+  min-width: 90px;
+  border: 1px solid rgba(28, 85, 145, 0.18);
+  border-radius: 999px;
+  padding: 0.58rem 1rem;
+  background: rgba(255, 255, 255, 0.74);
+  color: #2d4f76;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+body[data-page="jobs"] .jobs-audience-switch__button:hover {
+  background: rgba(230, 241, 251, 0.92);
+  color: #154c85;
+}
+
+body[data-page="jobs"] .jobs-audience-switch__button.is-active,
+body[data-page="jobs"] .jobs-audience-switch__button.is-active:hover {
+  border-color: #1f5f9c;
+  background: #1f5f9c;
+  color: #ffffff;
+}
+
 body[data-page="jobs"] .jobs-toolbar {
   border: 1px solid #e5e5e5;
   background: #ffffff;
@@ -973,10 +1019,20 @@ body[data-page="jobs"] .job-card__header-top {
   margin-bottom: 0.6rem;
 }
 
+body[data-page="jobs"] .job-card__header-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
 body[data-page="jobs"] .job-card__category,
+body[data-page="jobs"] .job-card__audience,
 body[data-page="jobs"] .job-card__remaining {
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
   min-height: 28px;
   padding: 0.28rem 0.6rem;
   font-size: 0.74rem;
@@ -990,9 +1046,16 @@ body[data-page="jobs"] .job-card__category {
   color: #0e5ab8;
 }
 
+body[data-page="jobs"] .job-card__audience {
+  background: #eef6ef;
+  border: 1px solid rgba(70, 136, 84, 0.22);
+  color: #2e6c39;
+}
+
 body[data-page="jobs"] .job-card__remaining {
   background: rgba(211, 36, 36, 0.08);
   color: #d32424;
+  flex-shrink: 0;
 }
 
 body[data-page="jobs"] .job-card__body {
@@ -1146,6 +1209,17 @@ body[data-page="jobs"] .apply-button {
     padding: 0.55rem 0.8rem;
   }
 
+  body[data-page="jobs"] .jobs-audience-switch {
+    margin-top: 14px;
+    gap: 6px;
+  }
+
+  body[data-page="jobs"] .jobs-audience-switch__button {
+    min-width: 82px;
+    font-size: 0.82rem;
+    padding: 0.52rem 0.85rem;
+  }
+
   body[data-page="jobs"] .jobs-toolbar {
     padding: 14px;
   }
@@ -1235,6 +1309,7 @@ body[data-page="jobs"] .apply-button {
 
   body[data-page="jobs"] .job-card__header-top {
     margin-bottom: 0.45rem;
+    align-items: flex-start;
   }
 
   body[data-page="jobs"] .job-card__body {
@@ -1308,6 +1383,18 @@ body[data-page="jobs"] .apply-button {
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
+  }
+
+  body[data-page="jobs"] .jobs-audience-switch {
+    width: 100%;
+    gap: 5px;
+  }
+
+  body[data-page="jobs"] .jobs-audience-switch__button {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.76rem;
   }
 
   body[data-page="jobs"] .filters label {
@@ -1441,6 +1528,26 @@ body[data-page="job"] {
 .job-chip--primary {
   background: #e6f1fb;
   color: #185fa5;
+}
+
+.job-chip--audience {
+  background: #eef6ef;
+  color: #2e6c39;
+}
+
+.job-chip--audience-miss {
+  background: #fff1f6;
+  color: #b04372;
+}
+
+.job-chip--audience-mister {
+  background: #eef6ff;
+  color: #2460a7;
+}
+
+.job-chip--audience-all {
+  background: #eef6ef;
+  color: #2e6c39;
 }
 
 .job-chip--danger {
