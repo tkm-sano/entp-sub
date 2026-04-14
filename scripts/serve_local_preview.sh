@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-export LANG=ja_JP.UTF-8
-export LC_ALL=ja_JP.UTF-8
+set -euo pipefail
 
 HOST="127.0.0.1"
 START_PORT=4000
@@ -22,4 +21,4 @@ fi
 
 echo "Starting local preview on http://${HOST}:${PORT}/"
 
-exec bundle exec jekyll serve --host "$HOST" --port "$PORT"
+exec "$(dirname "$0")/jekyll.sh" serve --host "$HOST" --port "$PORT"

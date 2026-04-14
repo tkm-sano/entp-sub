@@ -154,7 +154,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          bundle exec jekyll build 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/build-site.log"
+          ./scripts/jekyll.sh build 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/build-site.log"
           status=${PIPESTATUS[0]}
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0

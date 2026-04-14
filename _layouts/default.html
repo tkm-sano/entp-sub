@@ -14,6 +14,15 @@
         login: "{{ '/' | relative_url }}",
         jobs: "{{ '/jobs/' | relative_url }}"
       };
+      window.MENU_TALENT_THUMBNAILS = [
+        {% assign thumbnail_files = site.static_files | where_exp: "file", "file.path contains '/assets/thumbnails/images/'" %}
+        {% for file in thumbnail_files %}
+        {
+          path: {{ file.path | relative_url | jsonify }},
+          basename: {{ file.basename | jsonify }}
+        }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      ];
     </script>
 
     <script src="{{ '/assets/js/main.js' | relative_url }}"></script>

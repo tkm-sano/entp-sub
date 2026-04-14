@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pageId = document.body?.dataset?.page || "default";
   const routes = window.MENU_TALENT_ROUTES || { login: "/", jobs: "/jobs/" };
   const staticJobs = Array.isArray(window.MENU_TALENT_JOBS) ? window.MENU_TALENT_JOBS : [];
+  const thumbnailFiles = Array.isArray(window.MENU_TALENT_THUMBNAILS) ? window.MENU_TALENT_THUMBNAILS : [];
   const pageSize = 10;
 
   const loginEls = {
@@ -20,6 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const state = { jobs: [], appliedJobIds: new Set(), page: 1, appliedKeyword: "" };
+  const thumbnailRandomCache = new Map();
 
   // ------------------------------
   // ページ初期化
@@ -314,7 +316,166 @@ document.addEventListener("DOMContentLoaded", () => {
       )
     ).trim();
 
-    return /^(https?:\/\/|\/)/i.test(url) ? url : "";
+    if (/^(https?:\/\/|\/)/i.test(url)) {
+      return url;
+    }
+
+    return resolveThumbnailUrlByCategory(job);
+  }
+
+  function normalizeThumbnailKey(value) {
+    const normalized = String(value || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/^.*[\\/]/, "")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[\s._-]+/g, "");
+
+    return normalized;
+  }
+
+  function tokenizeThumbnailName(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/\.[^.]+$/, "")
+      .split(/[、,，\/／・\s_-]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2);
+  }
+
+  function getThumbnailFolderName(file) {
+    const path = String(file?.path || "").split("?")[0];
+    const segments = path.split("/").filter(Boolean);
+    return segments.length >= 2 ? segments[segments.length - 2] : "";
+  }
+
+  function tokenizeThumbnailFolderName(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .split(/[、,，\/／・\s]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2);
+  }
+
+  function buildThumbnailSearchText(job) {
+    const getValue = createJobValueResolver(job);
+    return [
+      getValue("category", "カテゴリ"),
+      getValue("title", "name", "job_title", "案件名（サイト上の見出し）", "案件名", "案件タイトル"),
+      getValue("product_name", "productName", "商品名（サービス名、ブランド名等）", "商品名"),
+      getValue("description", "details", "shoot_description", "shooting_content", "案件説明"),
+      getValue("media", "medium", "media_usage", "媒体"),
+      getValue("shooting_format", "shootingFormat", "撮影形式"),
+      getValue("concept", "コンセプト"),
+      getValue("makeup_image", "makeupImage", "メイク・ヘアメイクのイメージ"),
+      getValue("outfit", "wardrobe", "衣装")
+    ]
+      .join(" ")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/\s+/g, "");
+  }
+
+  function calculateKeywordScore(searchText, value, exactWeight = 3) {
+    const normalizedValue = normalizeThumbnailKey(value);
+    const tokens = tokenizeThumbnailName(value);
+    let score = 0;
+
+    if (normalizedValue && searchText.includes(normalizedValue)) {
+      score += normalizedValue.length * exactWeight;
+    }
+
+    tokens.forEach((token) => {
+      if (searchText.includes(token)) {
+        score += token.length;
+      }
+    });
+
+    return score;
+  }
+
+  function selectThumbnailFromGroup(files, seedSource, searchText) {
+    if (!Array.isArray(files) || !files.length) {
+      return null;
+    }
+
+    if (searchText) {
+      let bestFile = null;
+      let bestScore = -1;
+
+      files.forEach((file) => {
+        const score = calculateKeywordScore(searchText, file?.basename || "", 4);
+        if (score > bestScore) {
+          bestScore = score;
+          bestFile = file;
+        }
+      });
+
+      if (bestFile && bestScore > 0) {
+        return bestFile;
+      }
+    }
+
+    const cacheKey = `${String(seedSource || "")}::${files.map((file) => file?.path || "").join("|")}`;
+    if (thumbnailRandomCache.has(cacheKey)) {
+      return thumbnailRandomCache.get(cacheKey) || null;
+    }
+
+    const selected = files[Math.floor(Math.random() * files.length)] || files[0] || null;
+    thumbnailRandomCache.set(cacheKey, selected);
+    return selected;
+  }
+
+  function resolveThumbnailUrlByCategory(job) {
+    if (!thumbnailFiles.length) {
+      return "";
+    }
+
+    const searchText = buildThumbnailSearchText(job);
+    if (!searchText) {
+      return "";
+    }
+
+    const grouped = thumbnailFiles.reduce((map, file) => {
+      const folderName = getThumbnailFolderName(file);
+      if (!folderName) {
+        return map;
+      }
+
+      if (!map.has(folderName)) {
+        map.set(folderName, []);
+      }
+
+      map.get(folderName).push(file);
+      return map;
+    }, new Map());
+
+    let bestGroup = null;
+    let bestScore = 0;
+    let fallbackGroup = null;
+
+    grouped.forEach((files, folderName) => {
+      let score = calculateKeywordScore(searchText, folderName, 3);
+
+      if (/当てはまらない/.test(folderName)) {
+        fallbackGroup = files;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestGroup = files;
+      }
+    });
+
+    const selected = selectThumbnailFromGroup(
+      bestGroup || fallbackGroup,
+      pickFirst(job.job_id, job.id, job.title, job.name, searchText),
+      searchText
+    );
+
+    return String(selected?.path || "").trim();
   }
 
   function renderJobs() {
