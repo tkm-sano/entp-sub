@@ -1258,7 +1258,8 @@
         }
       });
       backToApplyConfirmButton?.addEventListener("click", () => {
-        setApplyModalStep(2);
+        resetApplyModalState();
+        closeConfirmModal();
       });
       modalShootDateOptions?.addEventListener("change", () => {
         if (currentShootDateOptions.length === 0) {
