@@ -911,7 +911,7 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
     lines.push(`${label}：${text}`);
   };
 
-  const shootDates = getShootDatesFromRow_(row, displayRow, columns).join(" / ");
+  const shootDates = formatShootDateListForDisplay_(getShootDatesFromRow_(row, displayRow, columns));
   const rewardValue = formatRewardDisplay_(
     colValue_(row, columns.reward, ""),
     colDisplay_(displayRow, columns.reward, "")
@@ -949,7 +949,7 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
   pushLine("想定時給", hourlyWageValue);
   pushLine("拘束時間", durationValue);
   pushLine("撮影候補日", shootDates);
-  pushLine("参加可能日程", Array.isArray(selectedShootDates) ? selectedShootDates.join(" / ") : "");
+  pushLine("参加可能日程", formatShootDateListForDisplay_(selectedShootDates));
   pushLine("応募条件", colDisplay_(displayRow, columns.requirements, "") || colValue_(row, columns.requirements, ""));
   pushLine("募集人数", formatRecruitmentDisplay_(
     colValue_(row, columns.max, ""),
@@ -1530,7 +1530,9 @@ function notifyDeadlinePassed() {
     const applicantContacts = buildApplicantContactsFromRecord_(applicantRecord);
     const applicantLines = applicantContacts.map((contact) => {
       const url = pageUrlByName[contact.normalizedName] || "（URLなし）";
-      const selectedDates = String(contact.selectedShootDates || "").trim();
+      const selectedDates = formatShootDateListForDisplay_(
+        String(contact.selectedShootDates || "").split(/\s+\/\s+/)
+      );
       return [
         `・${contact.rawName}`,
         `  ${url}`,
@@ -1828,6 +1830,42 @@ function getShootDatesFromRow_(row, displayRow, columns) {
 
   const fallback = colDisplay_(displayRow, columns.date, "");
   return fallback ? [String(fallback).trim()] : [];
+}
+
+function stripSecondsFromTime_(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\b([01]?\d|2[0-3]):([0-5]\d):([0-5]\d)\b/g, "$1:$2")
+    .trim();
+}
+
+function formatShootDateForDisplay_(value) {
+  const raw = stripSecondsFromTime_(value);
+  if (!raw) {
+    return "";
+  }
+
+  const hasTime = /\b([01]?\d|2[0-3]):[0-5]\d\b/.test(raw);
+  const hasRange = /[~〜～]/.test(raw)
+    || /\b([01]?\d|2[0-3]):[0-5]\d\s*[-ー−–]\s*([01]?\d|2[0-3]):[0-5]\d\b/.test(raw)
+    || /\b([01]?\d|2[0-3]):[0-5]\d\s*to\s*([01]?\d|2[0-3]):[0-5]\d\b/i.test(raw);
+
+  if (!hasTime || hasRange) {
+    return raw;
+  }
+
+  return `${raw}～`;
+}
+
+function formatShootDateListForDisplay_(values) {
+  if (!Array.isArray(values)) {
+    return "";
+  }
+
+  return values
+    .map((value) => formatShootDateForDisplay_(value))
+    .filter(Boolean)
+    .join(" / ");
 }
 
 function formatRewardDisplay_(rawValue, displayValue) {
