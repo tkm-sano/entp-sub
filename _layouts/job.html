@@ -160,11 +160,6 @@
     <div id="apply-confirm-modal" class="apply-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="apply-confirm-title">
       <div class="apply-confirm-modal__backdrop" data-close-modal="true"></div>
       <div class="apply-confirm-modal__panel">
-        <div class="apply-confirm-modal__step-indicator" aria-hidden="true">
-          <span id="apply-step-chip-1" class="apply-confirm-modal__step-chip is-active">1 日程選択</span>
-          <span id="apply-step-chip-2" class="apply-confirm-modal__step-chip">2 応募確認</span>
-          <span id="apply-step-chip-3" class="apply-confirm-modal__step-chip">3 入力</span>
-        </div>
         <h2 id="apply-confirm-title">応募に進む</h2>
 
         <section id="apply-step-select-dates" class="apply-confirm-step">
@@ -199,10 +194,6 @@
 
         <section id="apply-step-profile" class="apply-confirm-step hidden">
           <h3 class="apply-confirm-modal__section-title">Step 3. お名前とメールアドレス</h3>
-          <div class="apply-confirm-modal__selection-summary" aria-live="polite">
-            <p class="apply-confirm-modal__summary-label">選択した参加可能日程</p>
-            <p data-selected-shoot-dates-summary class="apply-confirm-modal__summary-value">-</p>
-          </div>
           <section class="apply-confirm-modal__form-card" aria-label="お名前とメールアドレス">
             <label class="apply-confirm-modal__field">
               <span class="apply-confirm-modal__field-label">お名前</span>
@@ -230,7 +221,7 @@
           </section>
           <div class="apply-confirm-modal__actions">
             <button type="button" id="back-to-apply-confirm" class="details-button">戻る</button>
-            <button type="button" id="submit-apply-button" class="apply-button">応募する</button>
+            <button type="button" id="submit-apply-button" class="apply-button">応募を確定する</button>
           </div>
         </section>
       </div>
@@ -248,7 +239,6 @@
       const modalAudienceConsentText = document.getElementById("modal-consent-audience-text");
       const modalShootDateOptions = document.getElementById("modal-shoot-date-options");
       const modalShootDateEmpty = document.getElementById("modal-shoot-date-empty");
-      const modalSelectedShootDatesSummaryEls = Array.from(document.querySelectorAll("[data-selected-shoot-dates-summary]"));
       const modalApplicantNameInput = document.getElementById("modal-applicant-name");
       const modalApplicantNameError = document.getElementById("modal-applicant-name-error");
       const modalContactEmailInput = document.getElementById("modal-contact-email");
@@ -257,9 +247,6 @@
       const confirmStep = document.getElementById("apply-step-confirm");
       const profileStep = document.getElementById("apply-step-profile");
       const backToApplyConfirmButton = document.getElementById("back-to-apply-confirm");
-      const applyStepChip1 = document.getElementById("apply-step-chip-1");
-      const applyStepChip2 = document.getElementById("apply-step-chip-2");
-      const applyStepChip3 = document.getElementById("apply-step-chip-3");
       const submitApplyButton = document.getElementById("submit-apply-button");
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
       if (!applyButtons.length) return;
@@ -558,20 +545,6 @@
           .filter(Boolean);
       }
 
-      function updateSelectedShootDatesSummary() {
-        if (!modalSelectedShootDatesSummaryEls.length) {
-          return;
-        }
-
-        const summary = getSelectedShootDates()
-          .map((value) => formatShootDateEntry(value))
-          .join(" / ");
-
-        modalSelectedShootDatesSummaryEls.forEach((element) => {
-          element.textContent = summary || "未選択";
-        });
-      }
-
       function setFieldError(errorEl, inputEl, message) {
         if (errorEl) {
           errorEl.textContent = message || "";
@@ -623,9 +596,6 @@
         selectDatesStep?.classList.toggle("hidden", step !== 1);
         confirmStep?.classList.toggle("hidden", step !== 2);
         profileStep?.classList.toggle("hidden", step !== 3);
-        applyStepChip1?.classList.toggle("is-active", step === 1);
-        applyStepChip2?.classList.toggle("is-active", step === 2);
-        applyStepChip3?.classList.toggle("is-active", step === 3);
       }
 
       function resetApplyModalState() {
@@ -645,7 +615,6 @@
         Array.from(document.querySelectorAll('input[name="modal-shoot-date-option"]')).forEach((input) => {
           input.checked = false;
         });
-        updateSelectedShootDatesSummary();
       }
 
       function setSubmitApplySubmittingState(isSubmitting) {
@@ -1195,7 +1164,6 @@
         const category = pickFirst(getValue("category", "カテゴリ"), media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
         renderShootDateOptions(buildShootDateOptions(job, getValue));
-        updateSelectedShootDatesSummary();
         updateAudienceConsent(job, getValue);
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "案件情報");
@@ -1290,10 +1258,9 @@
         }
       });
       backToApplyConfirmButton?.addEventListener("click", () => {
-        setApplyModalStep(1);
+        setApplyModalStep(2);
       });
       modalShootDateOptions?.addEventListener("change", () => {
-        updateSelectedShootDatesSummary();
         if (currentShootDateOptions.length === 0) {
           return;
         }
