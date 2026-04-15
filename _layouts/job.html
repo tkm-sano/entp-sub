@@ -151,7 +151,7 @@
       </section>
 
       <div class="job-apply">
-        <button id="apply-button-bottom" data-job-id="{{ page.job_id | default: '' }}" data-apply-trigger="true" type="button">この案件に応募する</button>
+        <button id="apply-button-bottom" data-job-id="{{ page.job_id | default: '' }}" data-apply-trigger="true" type="button">応募する</button>
         <p id="job-apply-deadline" class="job-apply-deadline">締切：未定</p>
         <a class="back-link" href="{{ '/jobs/' | relative_url }}">案件一覧に戻る</a>
       </div>
@@ -160,35 +160,49 @@
     <div id="apply-confirm-modal" class="apply-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="apply-confirm-title">
       <div class="apply-confirm-modal__backdrop" data-close-modal="true"></div>
       <div class="apply-confirm-modal__panel">
-        <h2 id="apply-confirm-title">応募内容の最終確認</h2>
-        <p class="apply-confirm-modal__text">応募確定前に以下を確認してください。</p>
-        <section class="apply-confirm-modal__policy-text" aria-label="キャンセルポリシー本文">
-          <h3>第5条（キャンセルポリシー）</h3>
-          <p>一度受諾した仕事をキャンセルする場合は、以下のポリシーが適用されます。</p>
-          <ul>
-            <li>受諾後のキャンセルにより、スタジオ予約代・ヘアメイク費用・クライアントへのキャンセル料など実費が発生した場合、地震・台風・交通機関の全面停止など、本人の努力では回避できない不可抗力の場合を除き、当社はモデルにその費用を請求することができます。撮影に臨むにあたっては、体調管理やスケジュール管理等を自己責任で徹底してください。</li>
-            <li>当日キャンセル・無断欠席の場合は、今後の仕事紹介をお断りする場合があります。</li>
-          </ul>
-          <p>※状況によっては診断書などの証明書類のご提出をお願いする場合があります。</p>
+        <div class="apply-confirm-modal__step-indicator" aria-hidden="true">
+          <span id="apply-step-chip-1" class="apply-confirm-modal__step-chip is-active">1 日程選択</span>
+          <span id="apply-step-chip-2" class="apply-confirm-modal__step-chip">2 応募確認</span>
+        </div>
+        <h2 id="apply-confirm-title">応募に進む</h2>
+
+        <section id="apply-step-select-dates" class="apply-confirm-step">
+          <h3 class="apply-confirm-modal__section-title">Step 1. 参加可能な日程を選択</h3>
+          <p class="apply-confirm-modal__helper">参加できる候補日を1つ以上選択してください。</p>
+          <div id="modal-shoot-date-options" class="apply-shoot-date-options" aria-label="参加可能日程の選択肢"></div>
+          <p id="modal-shoot-date-empty" class="apply-confirm-modal__note hidden">この案件は撮影候補日が未設定です。応募前に担当者へ確認してください。</p>
         </section>
-        <div class="job-consents">
-          <label class="job-consent">
-            <input type="checkbox" id="modal-consent-cancel-policy">
-            <span>上記のキャンセルポリシーを確認し、同意しました</span>
-          </label>
-          <label class="job-consent">
-            <input type="checkbox" id="modal-consent-shoot-dates">
-            <span>撮影候補日を確認し、参加可能な日程が1日以上あることを確認しました</span>
-          </label>
-          <label class="job-consent hidden" id="modal-consent-audience-label">
-            <input type="checkbox" id="modal-consent-audience">
-            <span id="modal-consent-audience-text" class="job-consent__attention">募集対象：男女両方募集であり、対象であることを確認しました</span>
-          </label>
-        </div>
-        <div class="apply-confirm-modal__actions">
-          <button type="button" id="cancel-apply-confirm" class="details-button">戻る</button>
-          <button type="button" id="confirm-apply-button" class="apply-button">応募確定に進む</button>
-        </div>
+
+        <section id="apply-step-confirm" class="apply-confirm-step hidden">
+          <h3 class="apply-confirm-modal__section-title">Step 2. キャンセルポリシーと応募内容の確認</h3>
+          <div class="apply-confirm-modal__selection-summary" aria-live="polite">
+            <p class="apply-confirm-modal__summary-label">選択した参加可能日程</p>
+            <p id="modal-selected-shoot-dates-summary" class="apply-confirm-modal__summary-value">-</p>
+          </div>
+          <section class="apply-confirm-modal__policy-text" aria-label="キャンセルポリシー本文">
+            <h3>第5条（キャンセルポリシー）</h3>
+            <p>一度受諾した仕事をキャンセルする場合は、以下のポリシーが適用されます。</p>
+            <ul>
+              <li>受諾後のキャンセルにより、スタジオ予約代・ヘアメイク費用・クライアントへのキャンセル料など実費が発生した場合、地震・台風・交通機関の全面停止など、本人の努力では回避できない不可抗力の場合を除き、当社はモデルにその費用を請求することができます。撮影に臨むにあたっては、体調管理やスケジュール管理等を自己責任で徹底してください。</li>
+              <li>当日キャンセル・無断欠席の場合は、今後の仕事紹介をお断りする場合があります。</li>
+            </ul>
+            <p>※状況によっては診断書などの証明書類のご提出をお願いする場合があります。</p>
+          </section>
+          <div class="job-consents">
+            <label class="job-consent">
+              <input type="checkbox" id="modal-consent-cancel-policy">
+              <span>上記のキャンセルポリシーを確認し、同意しました</span>
+            </label>
+            <label class="job-consent hidden" id="modal-consent-audience-label">
+              <input type="checkbox" id="modal-consent-audience">
+              <span id="modal-consent-audience-text" class="job-consent__attention">募集対象：男女両方募集であり、対象であることを確認しました</span>
+            </label>
+          </div>
+          <div class="apply-confirm-modal__actions">
+            <button type="button" id="back-to-shoot-date-selection" class="details-button">日程選択に戻る</button>
+            <button type="button" id="confirm-apply-button" class="apply-button">応募確定に進む</button>
+          </div>
+        </section>
       </div>
     </div>
   </main>
@@ -199,15 +213,22 @@
       const secondaryApplyButton = document.getElementById("apply-button-bottom");
       const modal = document.getElementById("apply-confirm-modal");
       const modalCancelPolicyCheckbox = document.getElementById("modal-consent-cancel-policy");
-      const modalShootDatesCheckbox = document.getElementById("modal-consent-shoot-dates");
       const modalAudienceCheckbox = document.getElementById("modal-consent-audience");
       const modalAudienceConsentLabel = document.getElementById("modal-consent-audience-label");
       const modalAudienceConsentText = document.getElementById("modal-consent-audience-text");
-      const cancelConfirmButton = document.getElementById("cancel-apply-confirm");
+      const modalShootDateOptions = document.getElementById("modal-shoot-date-options");
+      const modalShootDateEmpty = document.getElementById("modal-shoot-date-empty");
+      const modalSelectedShootDatesSummary = document.getElementById("modal-selected-shoot-dates-summary");
+      const selectDatesStep = document.getElementById("apply-step-select-dates");
+      const confirmStep = document.getElementById("apply-step-confirm");
+      const backToShootDateSelectionButton = document.getElementById("back-to-shoot-date-selection");
+      const applyStepChip1 = document.getElementById("apply-step-chip-1");
+      const applyStepChip2 = document.getElementById("apply-step-chip-2");
       const confirmApplyButton = document.getElementById("confirm-apply-button");
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
       if (!applyButtons.length) return;
       let audienceConsentRequired = false;
+      let currentShootDateOptions = [];
 
       const pageJobId = String((button?.dataset.jobId || secondaryApplyButton?.dataset.jobId || "")).trim();
       const queryJobId = new URLSearchParams(window.location.search).get("jobId") || "";
@@ -379,7 +400,7 @@
       }
 
       function hasRequiredConsents() {
-        const hasBaseConsents = Boolean(modalCancelPolicyCheckbox?.checked) && Boolean(modalShootDatesCheckbox?.checked);
+        const hasBaseConsents = Boolean(modalCancelPolicyCheckbox?.checked) && getSelectedShootDates().length > 0;
         if (!hasBaseConsents) {
           return false;
         }
@@ -389,12 +410,148 @@
 
       function openConfirmModal() {
         if (!modal) return;
+        resetApplyModalState();
         modal.classList.remove("hidden");
       }
 
       function closeConfirmModal() {
         if (!modal) return;
         modal.classList.add("hidden");
+      }
+
+      function normalizeShootDateOption(value) {
+        return stripSecondsFromTime(value)
+          .normalize("NFKC")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function buildShootDateOptions(job, getValue) {
+        const options = [];
+        const seen = {};
+        const appendOption = (value) => {
+          const normalized = normalizeShootDateOption(value);
+          if (!normalized) {
+            return;
+          }
+
+          const key = normalized.toLowerCase();
+          if (seen[key]) {
+            return;
+          }
+
+          seen[key] = true;
+          options.push({
+            value: normalized,
+            label: formatShootDateEntry(normalized)
+          });
+        };
+
+        [job?.shoot_dates, job?.shootDates].forEach((values) => {
+          if (Array.isArray(values)) {
+            values.forEach(appendOption);
+          }
+        });
+
+        [
+          getValue("shootDate1", "shoot_date_1", "撮影候補日①", "撮影候補日1"),
+          getValue("shootDate2", "shoot_date_2", "撮影候補日②", "撮影候補日2"),
+          getValue("shootDate3", "shoot_date_3", "撮影候補日③", "撮影候補日3"),
+          getValue("shootDate4", "shoot_date_4", "撮影候補日④", "撮影候補日4"),
+          getValue("shootDate5", "shoot_date_5", "撮影候補日⑤", "撮影候補日5")
+        ].forEach((value) => {
+          if (Array.isArray(value)) {
+            value.forEach(appendOption);
+            return;
+          }
+
+          String(value || "")
+            .split(/[\r\n]+/)
+            .forEach(appendOption);
+        });
+
+        if (options.length > 0) {
+          return options;
+        }
+
+        const fallback = pickFirst(
+          Array.isArray(job?.shoot_dates) ? job.shoot_dates.join("\n") : "",
+          getValue(
+            "candidate_shoot_dates",
+            "implementation_date",
+            "execution_date",
+            "date",
+            "schedule",
+            "実施日時",
+            "日時"
+          )
+        );
+
+        String(fallback || "")
+          .split(/[\r\n]+/)
+          .forEach((line) => {
+            String(line || "")
+              .split(/\s+\/\s+/)
+              .forEach(appendOption);
+          });
+
+        return options;
+      }
+
+      function renderShootDateOptions(options) {
+        if (!modalShootDateOptions) {
+          return;
+        }
+
+        currentShootDateOptions = Array.isArray(options) ? options : [];
+        modalShootDateOptions.innerHTML = currentShootDateOptions.map((option) => `
+          <label class="apply-shoot-date-option">
+            <input type="checkbox" name="modal-shoot-date-option" value="${escapeHtml(option.value)}">
+            <span>${escapeHtml(option.label)}</span>
+          </label>
+        `).join("");
+
+        if (modalShootDateEmpty) {
+          modalShootDateEmpty.classList.toggle("hidden", currentShootDateOptions.length > 0);
+        }
+      }
+
+      function getSelectedShootDates() {
+        return Array.from(document.querySelectorAll('input[name="modal-shoot-date-option"]:checked'))
+          .map((input) => normalizeShootDateOption(input.value))
+          .filter(Boolean);
+      }
+
+      function updateSelectedShootDatesSummary() {
+        if (!modalSelectedShootDatesSummary) {
+          return;
+        }
+
+        const summary = getSelectedShootDates()
+          .map((value) => formatShootDateEntry(value))
+          .join(" / ");
+
+        modalSelectedShootDatesSummary.textContent = summary || "未選択";
+      }
+
+      function setApplyModalStep(step) {
+        const isSelectStep = step !== 2;
+        selectDatesStep?.classList.toggle("hidden", !isSelectStep);
+        confirmStep?.classList.toggle("hidden", isSelectStep);
+        applyStepChip1?.classList.toggle("is-active", isSelectStep);
+        applyStepChip2?.classList.toggle("is-active", !isSelectStep);
+      }
+
+      function resetApplyModalState() {
+        setApplyModalStep(1);
+        modalCancelPolicyCheckbox.checked = false;
+        if (modalAudienceCheckbox) {
+          modalAudienceCheckbox.checked = false;
+        }
+        Array.from(document.querySelectorAll('input[name="modal-shoot-date-option"]')).forEach((input) => {
+          input.checked = false;
+        });
+        updateSelectedShootDatesSummary();
       }
 
       function setConfirmApplySubmittingState(isSubmitting) {
@@ -934,6 +1091,8 @@
         const audience = resolveJobAudience(getValue);
         const category = pickFirst(getValue("category", "カテゴリ"), media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
+        renderShootDateOptions(buildShootDateOptions(job, getValue));
+        updateSelectedShootDatesSummary();
         updateAudienceConsent(job, getValue);
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "案件情報");
@@ -1027,7 +1186,21 @@
           closeConfirmModal();
         }
       });
-      cancelConfirmButton?.addEventListener("click", closeConfirmModal);
+      backToShootDateSelectionButton?.addEventListener("click", () => {
+        setApplyModalStep(1);
+      });
+      modalShootDateOptions?.addEventListener("change", () => {
+        updateSelectedShootDatesSummary();
+        if (currentShootDateOptions.length === 0) {
+          return;
+        }
+
+        if (getSelectedShootDates().length === 0) {
+          return;
+        }
+
+        setApplyModalStep(2);
+      });
 
       applyButtons.forEach((applyTrigger) => {
         applyTrigger?.addEventListener("click", () => {
@@ -1037,8 +1210,9 @@
 
       confirmApplyButton?.addEventListener("click", async () => {
         if (confirmApplyButton.disabled) return;
-        if (!hasRequiredConsents()) { alert("キャンセルポリシー・撮影候補日・案件対象の確認が必要です。"); return; }
+        if (!hasRequiredConsents()) { alert("参加可能な日程の選択、キャンセルポリシー、案件対象の確認が必要です。"); return; }
         if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }
+        const selectedShootDates = getSelectedShootDates();
 
         const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
         if (!applicantName) { alert("応募者名を入力してください。"); return; }
@@ -1056,7 +1230,8 @@
             applicantName,
             contactEmail: contactEmail.trim(),
             acceptedCancelPolicy: "true",
-            acceptedShootDates: "true"
+            acceptedShootDates: "true",
+            selectedShootDates: selectedShootDates.join("\n")
           };
 
           const data = await requestApply(payload, apiTimeoutMs);
@@ -1069,9 +1244,7 @@
 
           alert("応募が完了しました。確認メールをご確認ください。");
           closeConfirmModal();
-          modalCancelPolicyCheckbox.checked = false;
-          modalShootDatesCheckbox.checked = false;
-          if (modalAudienceCheckbox) modalAudienceCheckbox.checked = false;
+          resetApplyModalState();
           setConfirmApplySubmittingState(false);
 
           // 最新の案件情報を再取得して応募者リストを更新

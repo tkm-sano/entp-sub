@@ -6,7 +6,8 @@
 
 const SHEET_NAMES = {
   jobs: "案件",
-  applicants: "応募者リスト"
+  applicants: "応募者リスト",
+  modelDecisionResponses: "モデル決定回答"
 };
 
 const API_BUILD = "2026-04-14-2";
@@ -29,6 +30,28 @@ const JOB_ID_FALLBACK_PREFIX = "job_tmp_";
 const JOB_ID_SEQUENCE_WIDTH = 4;
 const DEFAULT_JOB_PUBLIC_BASE_URL = "https://job-list.missconnect.jp/jobs";
 const HEADER_ROW = 1;
+const MODEL_DECISION_CONTACT_NAME_TITLE = "ご担当者名";
+const MODEL_DECISION_CONTACT_EMAIL_TITLE = "ご担当者メールアドレス";
+const MODEL_DECISION_PRIMARY_TITLE = "起用するモデル名";
+const MODEL_DECISION_SECONDARY_TITLE = "起用するモデル名（2人目・任意）";
+const MODEL_DECISION_TERTIARY_TITLE = "起用するモデル名（3人目・任意）";
+const MODEL_DECISION_MESSAGE_TITLE = "モデルへの連絡事項";
+const JOB_STATUS_HEADER = "案件状況";
+const JOB_STATUS_WAITING_CLIENT = "クライアント連絡待ち";
+const JOB_STATUS_MODEL_DECIDED = "モデル決定済";
+const MODEL_DECISION_RESPONSE_HEADERS = [
+  "回答日時",
+  "案件ID",
+  "source_key",
+  "案件名",
+  "モデル決定フォームURL",
+  MODEL_DECISION_CONTACT_NAME_TITLE,
+  MODEL_DECISION_CONTACT_EMAIL_TITLE,
+  MODEL_DECISION_PRIMARY_TITLE,
+  MODEL_DECISION_SECONDARY_TITLE,
+  MODEL_DECISION_TERTIARY_TITLE,
+  MODEL_DECISION_MESSAGE_TITLE
+];
 const APPLICANT_LIST_HEADERS = [
   "job_id",
   "source_key",
@@ -40,7 +63,8 @@ const APPLICANT_LIST_HEADERS = [
   "キャンセルポリシー確認日時",
   "応募日時",
   "deadline_notified_at",
-  "updated_at"
+  "updated_at",
+  "応募可能日程"
 ];
 const LEGACY_APPLICANT_LIST_HEADERS = [
   "job_id",
@@ -710,6 +734,7 @@ function apply_(params) {
   const jobId = String(params.jobId || "").trim();
   const acceptedCancelPolicy = String(params.acceptedCancelPolicy || "").trim().toLowerCase() === "true";
   const acceptedShootDates = String(params.acceptedShootDates || "").trim().toLowerCase() === "true";
+  const selectedShootDates = parseSelectedShootDates_(params.selectedShootDates);
 
   if (!jobId) {
     throw apiError_("invalid_param", "jobId 必須");
@@ -719,7 +744,7 @@ function apply_(params) {
     throw apiError_("invalid_param", "応募者名 必須");
   }
 
-  if (!acceptedCancelPolicy || !acceptedShootDates) {
+  if (!acceptedCancelPolicy || !acceptedShootDates || selectedShootDates.length === 0) {
     throw apiError_("consent_required", "キャンセルポリシーと撮影候補日の確認が必要です");
   }
 
@@ -770,6 +795,15 @@ function apply_(params) {
     const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
     const applicantRecord = getApplicantRecordForJob_(applicantStore, generatedId, sourceKey);
     const canonicalJobId = resolvePreferredJobId_(generatedId, applicantRecord?.jobId);
+    const availableShootDates = getShootDatesFromRow_(row, displayRow, columns);
+    const availableShootDateMap = {};
+    availableShootDates.forEach((value) => {
+      const normalized = normalizeShootDateValue_(value);
+      if (normalized) {
+        availableShootDateMap[normalized] = String(value || "").trim();
+      }
+    });
+    const selectedShootDatesDisplay = selectedShootDates.map((value) => availableShootDateMap[normalizeShootDateValue_(value)] || "");
 
     const existingApplicantsText = applicantRecord?.applicantsText || "";
     const applicantsList = splitLines_(existingApplicantsText);
@@ -777,10 +811,14 @@ function apply_(params) {
     const cancelPolicyConsentsList = splitLines_(applicantRecord?.cancelPolicyConsentsText || "");
     const cancelPolicyCheckedAtList = splitLines_(applicantRecord?.cancelPolicyCheckedAtText || "");
     const appliedAtList = splitLines_(applicantRecord?.appliedAtText || "");
-    const currentCount = applicantRecord ? applicantRecord.applicantCount : applicantsList.length;
+    const selectedShootDatesList = splitLines_(applicantRecord?.selectedShootDatesText || "");
 
     if (isDeadlinePassed_(deadline)) {
       throw apiError_("deadline_passed", "応募締切を過ぎています");
+    }
+
+    if (selectedShootDatesDisplay.some((value) => !value)) {
+      throw apiError_("invalid_param", "撮影候補日の選択内容が不正です");
     }
 
     if (applicantsList.includes(applicantName)) {
@@ -792,6 +830,7 @@ function apply_(params) {
     cancelPolicyConsentsList.push(acceptedCancelPolicy ? "TRUE" : "FALSE");
     cancelPolicyCheckedAtList.push(acceptedCancelPolicy ? applicationTimestamp : "");
     appliedAtList.push(applicationTimestamp);
+    selectedShootDatesList.push(selectedShootDatesDisplay.join(" / "));
     const newCount = applicantsList.length;
 
     upsertApplicantRecord_(applicantStore, {
@@ -804,12 +843,19 @@ function apply_(params) {
       cancelPolicyConsentsText: cancelPolicyConsentsList.join("\n"),
       cancelPolicyCheckedAtText: cancelPolicyCheckedAtList.join("\n"),
       appliedAtText: appliedAtList.join("\n"),
+      selectedShootDatesText: selectedShootDatesList.join("\n"),
       deadlineNotifiedAt: applicantRecord?.deadlineNotifiedAt || ""
     });
 
     sendConfirmationEmail_(contactEmail, applicantName, {
       jobTitle: title,
-      detailLines: buildConfirmationEmailDetailLines_(row, displayRow, columns, applicationTimestamp)
+      detailLines: buildConfirmationEmailDetailLines_(
+        row,
+        displayRow,
+        columns,
+        applicationTimestamp,
+        selectedShootDatesDisplay
+      )
     });
 
     return {
@@ -855,7 +901,7 @@ function sendConfirmationEmail_(to, name, details) {
   sendMail_(to, subject, body);
 }
 
-function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt) {
+function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt, selectedShootDates) {
   const lines = [];
   const pushLine = (label, value) => {
     const text = String(value || "").trim();
@@ -903,6 +949,7 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt)
   pushLine("想定時給", hourlyWageValue);
   pushLine("拘束時間", durationValue);
   pushLine("撮影候補日", shootDates);
+  pushLine("参加可能日程", Array.isArray(selectedShootDates) ? selectedShootDates.join(" / ") : "");
   pushLine("応募条件", colDisplay_(displayRow, columns.requirements, "") || colValue_(row, columns.requirements, ""));
   pushLine("募集人数", formatRecruitmentDisplay_(
     colValue_(row, columns.max, ""),
@@ -947,7 +994,97 @@ function ensureModelDecisionFormSubmitTrigger_(form) {
   }
 }
 
-function ensureModelDecisionFormForJob_(sheet, sheetRowNumber, jobTitle) {
+function setModelDecisionFormDescription_(form, jobTitle) {
+  form.setDescription([
+    `案件名：${jobTitle}`,
+    "",
+    "起用するモデルが決まりましたら、本フォームよりご回答ください。",
+    "1人目は必須です。2人目と3人目は必要な場合のみご選択ください。"
+  ].join("\n"));
+}
+
+function findFormItemByTitle_(form, title) {
+  return form.getItems().find((item) => String(item.getTitle() || "").trim() === String(title || "").trim()) || null;
+}
+
+function deleteFormItemsByTitles_(form, titles) {
+  const titleMap = {};
+  titles.forEach((title) => {
+    titleMap[String(title || "").trim()] = true;
+  });
+
+  const items = form.getItems();
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i];
+    if (titleMap[String(item.getTitle() || "").trim()]) {
+      form.deleteItem(item);
+    }
+  }
+}
+
+function setJobStatus_(sheet, rowNumber, status) {
+  if (!sheet || rowNumber <= HEADER_ROW) {
+    return;
+  }
+
+  const statusCol = ensureColumnByHeader_(sheet, JOB_STATUS_HEADER);
+  sheet.getRange(rowNumber, statusCol).setValue(String(status || "").trim());
+}
+
+function buildModelDecisionChoiceValues_(applicantNames) {
+  const seen = {};
+  return (Array.isArray(applicantNames) ? applicantNames : [])
+    .map((name) => String(name || "").trim())
+    .filter(Boolean)
+    .filter((name) => {
+      const key = normalizeName_(name).toLowerCase();
+      if (!key || seen[key]) {
+        return false;
+      }
+      seen[key] = true;
+      return true;
+    });
+}
+
+function syncModelDecisionFormSelectionItems_(form, applicantNames) {
+  const choiceValues = buildModelDecisionChoiceValues_(applicantNames);
+  if (choiceValues.length === 0) {
+    return;
+  }
+
+  deleteFormItemsByTitles_(form, [
+    MODEL_DECISION_PRIMARY_TITLE,
+    MODEL_DECISION_SECONDARY_TITLE,
+    MODEL_DECISION_TERTIARY_TITLE
+  ]);
+
+  const primaryItem = form.addListItem()
+    .setTitle(MODEL_DECISION_PRIMARY_TITLE)
+    .setChoiceValues(choiceValues)
+    .setRequired(true);
+  const secondaryItem = form.addListItem()
+    .setTitle(MODEL_DECISION_SECONDARY_TITLE)
+    .setChoiceValues(choiceValues)
+    .setRequired(false);
+  const tertiaryItem = form.addListItem()
+    .setTitle(MODEL_DECISION_TERTIARY_TITLE)
+    .setChoiceValues(choiceValues)
+    .setRequired(false);
+
+  const memoItem = findFormItemByTitle_(form, MODEL_DECISION_MESSAGE_TITLE);
+  if (!memoItem) {
+    return;
+  }
+
+  [primaryItem, secondaryItem, tertiaryItem].forEach((item) => {
+    const memoIndex = form.getItems().findIndex((formItem) => formItem.getId() === memoItem.getId());
+    if (memoIndex >= 0) {
+      form.moveItem(item, memoIndex);
+    }
+  });
+}
+
+function ensureModelDecisionFormForJob_(sheet, sheetRowNumber, jobTitle, applicantNames) {
   const formUrlCol = ensureColumnByHeader_(sheet, "モデル決定フォームURL");
   const formEditUrlCol = ensureColumnByHeader_(sheet, "モデル決定フォーム編集URL");
 
@@ -958,6 +1095,9 @@ function ensureModelDecisionFormForJob_(sheet, sheetRowNumber, jobTitle) {
     if (existingEditUrl) {
       try {
         const existingForm = FormApp.openByUrl(existingEditUrl);
+        setModelDecisionFormDescription_(existingForm, jobTitle);
+        syncModelDecisionFormSelectionItems_(existingForm, applicantNames);
+        existingForm.removeDestination();
         ensureModelDecisionFormSubmitTrigger_(existingForm);
       } catch (err) {
         // 保存済みフォームURLは再利用しつつ、トリガー再設定失敗は運用側で確認できるようにする。
@@ -971,31 +1111,20 @@ function ensureModelDecisionFormForJob_(sheet, sheetRowNumber, jobTitle) {
   }
 
   const form = FormApp.create(`【モデル決定回答】${jobTitle}`);
-  form.setDescription([
-    `案件名：${jobTitle}`,
-    "",
-    "起用するモデルが決まりましたら、本フォームよりご回答ください。",
-    "「起用するモデル名」は応募者一覧に記載の表記どおりに入力してください。",
-    "複数名を起用する場合は、改行またはカンマ区切りで入力してください。"
-  ].join("\n"));
+  setModelDecisionFormDescription_(form, jobTitle);
 
   form.addTextItem()
-    .setTitle("ご担当者名")
+    .setTitle(MODEL_DECISION_CONTACT_NAME_TITLE)
     .setRequired(true);
 
   form.addTextItem()
-    .setTitle("ご担当者メールアドレス")
+    .setTitle(MODEL_DECISION_CONTACT_EMAIL_TITLE)
     .setRequired(true);
 
   form.addTextItem()
-    .setTitle("起用するモデル名")
-    .setRequired(true);
-
-  form.addTextItem()
-    .setTitle("モデルへの連絡事項")
+    .setTitle(MODEL_DECISION_MESSAGE_TITLE)
     .setRequired(false);
-
-  form.setDestination(FormApp.DestinationType.SPREADSHEET, getSpreadsheet_().getId());
+  syncModelDecisionFormSelectionItems_(form, applicantNames);
   ensureModelDecisionFormSubmitTrigger_(form);
 
   const publishedUrl = form.getPublishedUrl();
@@ -1073,9 +1202,42 @@ function parseSelectedModelNames_(text) {
     });
 }
 
+function parseSelectedShootDates_(value) {
+  const raw = Array.isArray(value)
+    ? value.join("\n")
+    : String(value || "").trim();
+
+  if (!raw) {
+    return [];
+  }
+
+  const seen = {};
+  return raw
+    .split(/[\r\n]+/)
+    .map((entry) => normalizeShootDateValue_(entry))
+    .filter(Boolean)
+    .filter((entry) => {
+      const key = entry.toLowerCase();
+      if (seen[key]) {
+        return false;
+      }
+      seen[key] = true;
+      return true;
+    });
+}
+
+function getSelectedModelNamesFromResponseMap_(responseMap) {
+  return parseSelectedModelNames_([
+    responseMap[MODEL_DECISION_PRIMARY_TITLE],
+    responseMap[MODEL_DECISION_SECONDARY_TITLE],
+    responseMap[MODEL_DECISION_TERTIARY_TITLE]
+  ].join("\n"));
+}
+
 function buildApplicantContactsFromRecord_(record) {
   const names = splitLines_(record?.applicantsText || "");
   const emails = splitLines_(record?.applicantEmailsText || "");
+  const selectedShootDates = splitLines_(record?.selectedShootDatesText || "");
   const contacts = [];
 
   for (let i = 0; i < names.length; i += 1) {
@@ -1087,11 +1249,31 @@ function buildApplicantContactsFromRecord_(record) {
     contacts.push({
       rawName,
       normalizedName: normalizeName_(rawName),
-      email: String(emails[i] || "").trim()
+      email: String(emails[i] || "").trim(),
+      selectedShootDates: String(selectedShootDates[i] || "").trim()
     });
   }
 
   return contacts;
+}
+
+function appendModelDecisionResponseRow_(data) {
+  const sheet = getModelDecisionResponsesSheet_();
+  const values = [
+    String(data?.submittedAt || "").trim(),
+    String(data?.jobId || "").trim(),
+    String(data?.sourceKey || "").trim(),
+    String(data?.jobTitle || "").trim(),
+    String(data?.formUrl || "").trim(),
+    String(data?.contactName || "").trim(),
+    String(data?.contactEmail || "").trim(),
+    String(data?.selectedPrimary || "").trim(),
+    String(data?.selectedSecondary || "").trim(),
+    String(data?.selectedTertiary || "").trim(),
+    String(data?.clientMessage || "").trim()
+  ];
+
+  sheet.appendRow(values);
 }
 
 function sendModelSelectionResultEmail_(to, name, details) {
@@ -1180,8 +1362,12 @@ function onModelDecisionFormSubmit_(e) {
     }
 
     const responseMap = getFormResponseValueMap_(e);
-    const selectedNames = parseSelectedModelNames_(responseMap["起用するモデル名"]);
-    const clientMessage = String(responseMap["モデルへの連絡事項"] || "").trim();
+    const selectedNames = getSelectedModelNamesFromResponseMap_(responseMap);
+    const clientMessage = String(responseMap[MODEL_DECISION_MESSAGE_TITLE] || "").trim();
+    const submittedAt = e?.response?.getTimestamp ? e.response.getTimestamp() : new Date();
+    const submittedAtIso = parseDate_(submittedAt)
+      ? parseDate_(submittedAt).toISOString()
+      : new Date().toISOString();
 
     if (selectedNames.length === 0) {
       sheet.getRange(rowNumber, errorCol).setValue("起用するモデル名が未入力です。");
@@ -1249,7 +1435,21 @@ function onModelDecisionFormSubmit_(e) {
     sheet.getRange(rowNumber, selectedModelsCol).setValue(
       selectedContacts.map((contact) => contact.rawName).join("\n")
     );
+    appendModelDecisionResponseRow_({
+      submittedAt: submittedAtIso,
+      jobId: canonicalJobId,
+      sourceKey,
+      jobTitle: title,
+      formUrl,
+      contactName: responseMap[MODEL_DECISION_CONTACT_NAME_TITLE],
+      contactEmail: responseMap[MODEL_DECISION_CONTACT_EMAIL_TITLE],
+      selectedPrimary: responseMap[MODEL_DECISION_PRIMARY_TITLE],
+      selectedSecondary: responseMap[MODEL_DECISION_SECONDARY_TITLE],
+      selectedTertiary: responseMap[MODEL_DECISION_TERTIARY_TITLE],
+      clientMessage
+    });
     sheet.getRange(rowNumber, notifiedAtCol).setValue(new Date().toISOString());
+    setJobStatus_(sheet, rowNumber, JOB_STATUS_MODEL_DECIDED);
     sheet.getRange(rowNumber, memoCol).setValue(
       skippedNames.length > 0
         ? `メールアドレス未登録または不正のため未送信: ${skippedNames.join("、")}`
@@ -1272,6 +1472,7 @@ function notifyDeadlinePassed() {
 
   const headers = values[0].map(h => String(h).trim());
   const columns = getJobColumns_(headers);
+  const modelDecisionFormUrlCol = findColumn_(headers, "モデル決定フォームURL");
   const applicantStore = getApplicantListStore_();
 
   if (columns.title < 0 || columns.deadline < 0) {
@@ -1299,6 +1500,15 @@ function notifyDeadlinePassed() {
     const notified = applicantRecord?.deadlineNotifiedAt || "";
     const clientEmails = getNotificationEmailsFromRow_(row, displayRow, columns);
     const title = String(displayRow[columns.title] || row[columns.title] || "").trim();
+    const applicantsText = applicantRecord?.applicantsText || "";
+    const names = splitLines_(applicantsText);
+    const existingFormUrl = modelDecisionFormUrlCol >= 0
+      ? String(displayRow[modelDecisionFormUrlCol] || row[modelDecisionFormUrlCol] || "").trim()
+      : "";
+
+    if (notified && existingFormUrl && names.length > 0 && title) {
+      ensureModelDecisionFormForJob_(sheet, sheetRowNumber, title, names);
+    }
 
     if (!deadline || notified || clientEmails.length === 0 || !title) {
       return;
@@ -1317,16 +1527,19 @@ function notifyDeadlinePassed() {
       return;
     }
 
-    const applicantsText = applicantRecord?.applicantsText || "";
-    const names = splitLines_(applicantsText);
-
-    const applicantLines = names.map(name => {
-      const url = pageUrlByName[normalizeName_(name)] || "（URLなし）";
-      return `・${name}\n  ${url}`;
+    const applicantContacts = buildApplicantContactsFromRecord_(applicantRecord);
+    const applicantLines = applicantContacts.map((contact) => {
+      const url = pageUrlByName[contact.normalizedName] || "（URLなし）";
+      const selectedDates = String(contact.selectedShootDates || "").trim();
+      return [
+        `・${contact.rawName}`,
+        `  ${url}`,
+        selectedDates ? `  参加可能日程: ${selectedDates}` : "  参加可能日程: （未回答）"
+      ].join("\n");
     });
 
     const formInfo = names.length > 0
-      ? ensureModelDecisionFormForJob_(sheet, sheetRowNumber, title)
+      ? ensureModelDecisionFormForJob_(sheet, sheetRowNumber, title, names)
       : { url: "", editUrl: "" };
 
     const deadlineStr = Utilities.formatDate(deadlineDate, TZ, "yyyy年MM月dd日");
@@ -1359,6 +1572,9 @@ function notifyDeadlinePassed() {
     sendMail_(clientEmails.join(","), subject, body, {
       cc: CLIENT_NOTIFICATION_CC
     });
+    if (formInfo.url) {
+      setJobStatus_(sheet, sheetRowNumber, JOB_STATUS_WAITING_CLIENT);
+    }
     upsertApplicantRecord_(applicantStore, {
       jobId: canonicalJobId,
       sourceKey,
@@ -1391,7 +1607,8 @@ function getApplicantListStore_() {
     cancelPolicyConsentsText: String(colValue_(row, columns.cancelPolicyConsents, "") || "").trim(),
     cancelPolicyCheckedAtText: String(colValue_(row, columns.cancelPolicyCheckedAt, "") || "").trim(),
     appliedAtText: String(colValue_(row, columns.appliedAt, "") || "").trim(),
-    deadlineNotifiedAt: String(colValue_(row, columns.notified, "") || "").trim()
+    deadlineNotifiedAt: String(colValue_(row, columns.notified, "") || "").trim(),
+    selectedShootDatesText: String(colValue_(row, columns.selectedShootDates, "") || "").trim()
   }));
   const byJobId = {};
   const bySourceKey = {};
@@ -1422,7 +1639,8 @@ function getApplicantListColumns_(headers) {
     cancelPolicyCheckedAt: find("キャンセルポリシー確認日時", "cancel_policy_checked_at"),
     appliedAt: find("応募日時", "applied_at"),
     notified: find("deadline_notified_at", "締切通知日時", "通知日時"),
-    updatedAt: find("updated_at")
+    updatedAt: find("updated_at"),
+    selectedShootDates: find("応募可能日程", "selected_shoot_dates")
   };
 }
 
@@ -1445,6 +1663,7 @@ function upsertApplicantRecord_(store, recordInput) {
   const resolvedCancelPolicyConsentsText = String(recordInput.cancelPolicyConsentsText ?? record?.cancelPolicyConsentsText ?? "").trim();
   const resolvedCancelPolicyCheckedAtText = String(recordInput.cancelPolicyCheckedAtText ?? record?.cancelPolicyCheckedAtText ?? "").trim();
   const resolvedAppliedAtText = String(recordInput.appliedAtText ?? record?.appliedAtText ?? "").trim();
+  const resolvedSelectedShootDatesText = String(recordInput.selectedShootDatesText ?? record?.selectedShootDatesText ?? "").trim();
   const resolvedApplicantCount = recordInput.applicantCount != null
     ? normalizeNumber_(recordInput.applicantCount)
     : (resolvedApplicantsText ? splitLines_(resolvedApplicantsText).length : 0);
@@ -1459,7 +1678,8 @@ function upsertApplicantRecord_(store, recordInput) {
     resolvedCancelPolicyCheckedAtText,
     resolvedAppliedAtText,
     String(recordInput.deadlineNotifiedAt ?? record?.deadlineNotifiedAt ?? "").trim(),
-    nowIso
+    nowIso,
+    resolvedSelectedShootDatesText
   ];
 
   if (record) {
@@ -1477,6 +1697,7 @@ function upsertApplicantRecord_(store, recordInput) {
     record.cancelPolicyCheckedAtText = values[7];
     record.appliedAtText = values[8];
     record.deadlineNotifiedAt = values[9];
+    record.selectedShootDatesText = values[11];
     store.byJobId[record.jobId] = record;
     store.bySourceKey[record.sourceKey] = record;
     return record;
@@ -1494,7 +1715,8 @@ function upsertApplicantRecord_(store, recordInput) {
     cancelPolicyConsentsText: values[6],
     cancelPolicyCheckedAtText: values[7],
     appliedAtText: values[8],
-    deadlineNotifiedAt: values[9]
+    deadlineNotifiedAt: values[9],
+    selectedShootDatesText: values[11]
   };
   store.records.push(newRecord);
   if (newRecord.jobId) {
@@ -1786,6 +2008,18 @@ function getApplicantListSheet_() {
   return sheet;
 }
 
+function getModelDecisionResponsesSheet_() {
+  const ss = getSpreadsheet_();
+  let sheet = ss.getSheetByName(SHEET_NAMES.modelDecisionResponses);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAMES.modelDecisionResponses, ss.getNumSheets() + 1);
+  }
+
+  ensureModelDecisionResponsesHeaderRow_(sheet);
+  return sheet;
+}
+
 function ensureApplicantListHeaderRow_(sheet) {
   const lastCol = sheet.getLastColumn();
   const lastRow = sheet.getLastRow();
@@ -1809,6 +2043,27 @@ function ensureApplicantListHeaderRow_(sheet) {
   }
 
   sheet.getRange(HEADER_ROW, 1, 1, APPLICANT_LIST_HEADERS.length).setValues([APPLICANT_LIST_HEADERS]);
+}
+
+function ensureModelDecisionResponsesHeaderRow_(sheet) {
+  const lastCol = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+
+  if (lastCol === 0 || lastRow === 0) {
+    sheet.getRange(HEADER_ROW, 1, 1, MODEL_DECISION_RESPONSE_HEADERS.length).setValues([MODEL_DECISION_RESPONSE_HEADERS]);
+    return;
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, Math.max(lastCol, MODEL_DECISION_RESPONSE_HEADERS.length))
+    .getValues()[0]
+    .map(h => String(h).trim());
+
+  if (isExactHeaderSequence_(headers, MODEL_DECISION_RESPONSE_HEADERS)) {
+    return;
+  }
+
+  sheet.getRange(HEADER_ROW, 1, 1, MODEL_DECISION_RESPONSE_HEADERS.length).setValues([MODEL_DECISION_RESPONSE_HEADERS]);
 }
 
 function isExactHeaderSequence_(headers, expected) {
@@ -2271,6 +2526,10 @@ function normalizeSourceValue_(value) {
     .normalize("NFKC")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeShootDateValue_(value) {
+  return normalizeSourceValue_(String(value || "").replace(/\b([01]?\d|2[0-3]):([0-5]\d):([0-5]\d)\b/g, "$1:$2"));
 }
 
 function normalizeName_(value) {
