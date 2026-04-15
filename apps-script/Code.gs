@@ -910,8 +910,24 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
     }
     lines.push(`${label}：${text}`);
   };
+  const pushShootDateLine = (label, values) => {
+    const items = Array.isArray(values)
+      ? values.map((value) => formatShootDateForDisplay_(value)).filter(Boolean)
+      : [];
+    if (items.length === 0) {
+      return;
+    }
+    if (items.length === 1) {
+      lines.push(`${label}：${items[0]}`);
+      return;
+    }
+    lines.push(`${label}：`);
+    items.forEach((item) => {
+      lines.push(`・${item}`);
+    });
+  };
 
-  const shootDates = formatShootDateListForDisplay_(getShootDatesFromRow_(row, displayRow, columns));
+  const shootDates = getShootDatesFromRow_(row, displayRow, columns);
   const rewardValue = formatRewardDisplay_(
     colValue_(row, columns.reward, ""),
     colDisplay_(displayRow, columns.reward, "")
@@ -948,8 +964,8 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
   pushLine("報酬", rewardValue);
   pushLine("想定時給", hourlyWageValue);
   pushLine("拘束時間", durationValue);
-  pushLine("撮影候補日", shootDates);
-  pushLine("参加可能日程", formatShootDateListForDisplay_(selectedShootDates));
+  pushShootDateLine("撮影候補日", shootDates);
+  pushShootDateLine("参加可能日程", selectedShootDates);
   pushLine("応募条件", colDisplay_(displayRow, columns.requirements, "") || colValue_(row, columns.requirements, ""));
   pushLine("募集人数", formatRecruitmentDisplay_(
     colValue_(row, columns.max, ""),

@@ -449,6 +449,14 @@
           .trim();
       }
 
+      const SHOOT_DATE_FIELD_CANDIDATES = [
+        ["shootDate1", "shoot_date_1", "撮影候補日①", "撮影候補日1", "撮影候補日①\n※時刻は集合時刻をご入力ください。"],
+        ["shootDate2", "shoot_date_2", "撮影候補日②", "撮影候補日2", "撮影候補日②\n※時刻は集合時刻をご入力ください。"],
+        ["shootDate3", "shoot_date_3", "撮影候補日③", "撮影候補日3", "撮影候補日③\n※時刻は集合時刻をご入力ください。"],
+        ["shootDate4", "shoot_date_4", "撮影候補日④", "撮影候補日4", "【任意】撮影候補日④\n※時刻は集合時刻をご入力ください。"],
+        ["shootDate5", "shoot_date_5", "撮影候補日⑤", "撮影候補日5", "【任意】撮影候補日⑤\n※時刻は集合時刻をご入力ください。"]
+      ];
+
       function buildShootDateOptions(job, getValue) {
         const options = [];
         const seen = {};
@@ -476,13 +484,7 @@
           }
         });
 
-        [
-          getValue("shootDate1", "shoot_date_1", "撮影候補日①", "撮影候補日1"),
-          getValue("shootDate2", "shoot_date_2", "撮影候補日②", "撮影候補日2"),
-          getValue("shootDate3", "shoot_date_3", "撮影候補日③", "撮影候補日3"),
-          getValue("shootDate4", "shoot_date_4", "撮影候補日④", "撮影候補日4"),
-          getValue("shootDate5", "shoot_date_5", "撮影候補日⑤", "撮影候補日5")
-        ].forEach((value) => {
+        SHOOT_DATE_FIELD_CANDIDATES.map((candidates) => getValue(...candidates)).forEach((value) => {
           if (Array.isArray(value)) {
             value.forEach(appendOption);
             return;
@@ -713,6 +715,22 @@
         if (!el) return;
         const text = value === undefined || value === null ? "" : String(value).trim();
         el.textContent = text || fallback;
+      }
+
+      function setBulletListOrFallback(id, items, fallback) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        const values = Array.isArray(items)
+          ? items.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+
+        if (values.length === 0) {
+          el.textContent = fallback;
+          return;
+        }
+
+        el.innerHTML = `<ul class="job-field-bullet-list">${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
       }
 
       function setLinkOrFallback(id, value, fallback) {
@@ -1084,6 +1102,7 @@
           "報酬"
         );
         const totalReward = formatRewardDisplay(totalRewardValue);
+        const shootDateOptions = buildShootDateOptions(job, getValue);
 
         const productName = pickFirst(
           getValue("product_name", "productName", "商品名（サービス名、ブランド名等）", "商品名")
@@ -1105,6 +1124,7 @@
         const hourlyWage = formatHourlyWageDisplay(hourlyWageValue, totalRewardValue, durationValue);
 
         const implementationDateRaw = pickFirst(
+          shootDateOptions.map((option) => option.label).join(" / "),
           Array.isArray(getValue("shoot_dates")) ? getValue("shoot_dates").join(" / ") : "",
           getValue(
             "candidate_shoot_dates",
@@ -1117,6 +1137,11 @@
             "撮影候補日③",
             "撮影候補日④",
             "撮影候補日⑤",
+            "撮影候補日①\n※時刻は集合時刻をご入力ください。",
+            "撮影候補日②\n※時刻は集合時刻をご入力ください。",
+            "撮影候補日③\n※時刻は集合時刻をご入力ください。",
+            "【任意】撮影候補日④\n※時刻は集合時刻をご入力ください。",
+            "【任意】撮影候補日⑤\n※時刻は集合時刻をご入力ください。",
             "実施日時",
             "日時"
           )
@@ -1163,7 +1188,7 @@
         const audience = resolveJobAudience(getValue);
         const category = pickFirst(getValue("category", "カテゴリ"), media, shootingFormat);
         const heroSummary = pickFirst(description, requirements, makeupImage, "条件と募集内容を確認してください。");
-        renderShootDateOptions(buildShootDateOptions(job, getValue));
+        renderShootDateOptions(shootDateOptions);
         updateAudienceConsent(job, getValue);
         setText("job-title", resolvedTitle);
         setTextOrFallback("job-kicker", category, "案件情報");
@@ -1206,11 +1231,7 @@
         }
         setTextOrFallback("job-duration", duration, "-");
         setTextOrFallback("job-hourly-wage", hourlyWage, "-");
-        const resolvedShootDates = getValue("shoot_dates");
-        const shootDatesText = Array.isArray(resolvedShootDates) && resolvedShootDates.length > 0
-          ? resolvedShootDates.map((value) => formatShootDateEntry(value)).join("\n")
-          : implementationDate;
-        setTextOrFallback("job-shoot-dates", shootDatesText, "-");
+        setBulletListOrFallback("job-shoot-dates", shootDateOptions.map((option) => option.label), "-");
         setTextOrFallback("job-location", location, "-");
         setTextOrFallback("job-requirements", requirements, "-");
         setTextOrFallback("job-recruitment-number", formatRecruitmentDisplay(recruitmentNumber), "-");
