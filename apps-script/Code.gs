@@ -808,16 +808,8 @@ function apply_(params) {
     });
 
     sendConfirmationEmail_(contactEmail, applicantName, {
-      jobId: canonicalJobId,
       jobTitle: title,
-      shootDates: getShootDatesFromRow_(row, displayRow, columns).join(" / "),
-      location: colDisplay_(displayRow, columns.location, ""),
-      reward: formatRewardDisplay_(
-        colValue_(row, columns.reward, ""),
-        colDisplay_(displayRow, columns.reward, "")
-      ),
-      deadline,
-      appliedAt: applicationTimestamp
+      detailLines: buildConfirmationEmailDetailLines_(row, displayRow, columns, applicationTimestamp)
     });
 
     return {
@@ -837,28 +829,9 @@ function apply_(params) {
 
 function sendConfirmationEmail_(to, name, details) {
   const jobTitle = String(details?.jobTitle || "").trim() || "案件";
-  const jobId = String(details?.jobId || "").trim();
-  const shootDates = String(details?.shootDates || "").trim();
-  const location = String(details?.location || "").trim();
-  const reward = String(details?.reward || "").trim();
-  const appliedAt = details?.appliedAt;
-
-  let appliedAtStr = "";
-  const appliedAtDate = parseDate_(appliedAt);
-  if (appliedAtDate) {
-    appliedAtStr = Utilities.formatDate(appliedAtDate, TZ, "yyyy年MM月dd日 HH:mm");
-  } else if (appliedAt) {
-    appliedAtStr = String(appliedAt);
-  }
-
-  const detailLines = [
-    `案件名：${jobTitle}`,
-    jobId ? `案件ID：${jobId}` : "",
-    shootDates ? `撮影候補日：${shootDates}` : "",
-    location ? `実施場所：${location}` : "",
-    reward ? `報酬：${reward}` : "",
-    appliedAtStr ? `応募日時：${appliedAtStr}` : ""
-  ].filter(Boolean);
+  const detailLines = Array.isArray(details?.detailLines) && details.detailLines.length > 0
+    ? details.detailLines
+    : [`案件名：${jobTitle}`];
 
   const subject = `【応募確認】${jobTitle}`;
   const body = [
@@ -880,6 +853,74 @@ function sendConfirmationEmail_(to, name, details) {
   ].join("\n");
 
   sendMail_(to, subject, body);
+}
+
+function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt) {
+  const lines = [];
+  const pushLine = (label, value) => {
+    const text = String(value || "").trim();
+    if (!text) {
+      return;
+    }
+    lines.push(`${label}：${text}`);
+  };
+
+  const shootDates = getShootDatesFromRow_(row, displayRow, columns).join(" / ");
+  const rewardValue = formatRewardDisplay_(
+    colValue_(row, columns.reward, ""),
+    colDisplay_(displayRow, columns.reward, "")
+  );
+  const durationValue = formatDurationDisplay_(
+    colValue_(row, columns.duration, ""),
+    colDisplay_(displayRow, columns.duration, "")
+  );
+  const hourlyWageValue = formatHourlyWageDisplay_(
+    colValue_(row, columns.hourlyWage, ""),
+    colDisplay_(displayRow, columns.hourlyWage, ""),
+    colValue_(row, columns.reward, ""),
+    colValue_(row, columns.duration, "")
+  );
+  const outfitValue = String(
+    colDisplay_(displayRow, columns.outfit, "")
+    || colDisplay_(displayRow, columns.outfitAvailability, "")
+    || colValue_(row, columns.outfit, "")
+    || colValue_(row, columns.outfitAvailability, "")
+    || ""
+  ).trim();
+
+  let appliedAtStr = "";
+  const appliedAtDate = parseDate_(appliedAt);
+  if (appliedAtDate) {
+    appliedAtStr = Utilities.formatDate(appliedAtDate, TZ, "yyyy年MM月dd日 HH:mm");
+  } else if (appliedAt) {
+    appliedAtStr = String(appliedAt);
+  }
+
+  pushLine("案件名", colDisplay_(displayRow, columns.title, "") || colValue_(row, columns.title, ""));
+  pushLine("商品名", colDisplay_(displayRow, columns.productName, "") || colValue_(row, columns.productName, ""));
+  pushLine("商品URL", colDisplay_(displayRow, columns.productUrl, "") || colValue_(row, columns.productUrl, ""));
+  pushLine("報酬", rewardValue);
+  pushLine("想定時給", hourlyWageValue);
+  pushLine("拘束時間", durationValue);
+  pushLine("撮影候補日", shootDates);
+  pushLine("応募条件", colDisplay_(displayRow, columns.requirements, "") || colValue_(row, columns.requirements, ""));
+  pushLine("募集人数", formatRecruitmentDisplay_(
+    colValue_(row, columns.max, ""),
+    colDisplay_(displayRow, columns.max, "")
+  ));
+  pushLine("案件説明", colDisplay_(displayRow, columns.description, "") || colValue_(row, columns.description, ""));
+  pushLine("実施場所", colDisplay_(displayRow, columns.location, "") || colValue_(row, columns.location, ""));
+  pushLine("撮影形式", colDisplay_(displayRow, columns.shootingFormat, "") || colValue_(row, columns.shootingFormat, ""));
+  pushLine("媒体", colDisplay_(displayRow, columns.media, "") || colValue_(row, columns.media, ""));
+  pushLine("メイク・ヘアメイク", colDisplay_(displayRow, columns.makeup, "") || colValue_(row, columns.makeup, ""));
+  pushLine("メイク・ヘアメイクのイメージ", colDisplay_(displayRow, columns.makeupImage, "") || colValue_(row, columns.makeupImage, ""));
+  pushLine("衣装", outfitValue);
+  pushLine("持ち物", colDisplay_(displayRow, columns.belongings, "") || colValue_(row, columns.belongings, ""));
+  pushLine("使用期間", colDisplay_(displayRow, columns.period, "") || colValue_(row, columns.period, ""));
+  pushLine("競合", colDisplay_(displayRow, columns.competition, "") || colValue_(row, columns.competition, ""));
+  pushLine("応募日時", appliedAtStr);
+
+  return lines;
 }
 
 /* =========================================
@@ -1598,6 +1639,20 @@ function formatDurationDisplay_(rawValue, displayValue) {
   const hours = Math.floor(minutes / 60);
   const remainMinutes = minutes % 60;
   return remainMinutes > 0 ? `${hours}時間${remainMinutes}分` : `${hours}時間`;
+}
+
+function formatRecruitmentDisplay_(rawValue, displayValue) {
+  const display = String(displayValue || "").trim();
+  if (display && /名/.test(display)) {
+    return display;
+  }
+
+  const amount = normalizeNumber_(rawValue);
+  if (!amount) {
+    return display;
+  }
+
+  return `${amount.toLocaleString("ja-JP")}名`;
 }
 
 function formatHourlyWageDisplay_(rawValue, displayValue, rewardValue, durationValue) {
