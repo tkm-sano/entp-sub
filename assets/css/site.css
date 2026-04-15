@@ -1880,6 +1880,69 @@ body[data-page="job"] {
   line-height: 1.6;
 }
 
+.apply-confirm-modal__form-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fbfcfe;
+  text-align: left;
+}
+
+.apply-confirm-modal__form-title {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--text);
+}
+
+.apply-confirm-modal__field {
+  display: grid;
+  gap: 6px;
+}
+
+.apply-confirm-modal__field-label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.apply-confirm-modal__field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.78rem 0.95rem;
+  border: 1px solid #d5dbe7;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.apply-confirm-modal__field input::placeholder {
+  color: #96a0af;
+}
+
+.apply-confirm-modal__field input:focus {
+  border-color: rgba(14, 90, 184, 0.45);
+  box-shadow: 0 0 0 3px rgba(14, 90, 184, 0.12);
+  outline: none;
+}
+
+.apply-confirm-modal__field input.is-error {
+  border-color: #cc4b37;
+  background: #fff8f6;
+  box-shadow: 0 0 0 3px rgba(204, 75, 55, 0.12);
+}
+
+.apply-confirm-modal__field-error {
+  margin: -4px 0 0;
+  color: #b03b28;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .apply-confirm-modal__actions {
   display: flex;
   gap: 8px;
@@ -2003,6 +2066,17 @@ body[data-page="job"] {
     padding: 12px;
   }
 
+  .apply-confirm-modal__form-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .apply-confirm-modal__field input {
+    min-height: 46px;
+    padding: 0.72rem 0.85rem;
+    font-size: 0.92rem;
+  }
+
   .apply-confirm-modal__policy-text p,
   .apply-confirm-modal__policy-text li {
     font-size: 13px;
@@ -2066,6 +2140,11 @@ body[data-page="job"] {
     gap: 8px;
   }
 
+  .apply-confirm-modal__form-card {
+    padding: 10px;
+    gap: 9px;
+  }
+
   .apply-confirm-modal__policy-text h3 {
     font-size: 0.95rem;
   }
@@ -2084,6 +2163,21 @@ body[data-page="job"] {
   .apply-confirm-modal__note,
   .apply-confirm-modal__summary-value {
     font-size: 0.86rem;
+  }
+
+  .apply-confirm-modal__form-title {
+    font-size: 0.92rem;
+  }
+
+  .apply-confirm-modal__field-label,
+  .apply-confirm-modal__field-error {
+    font-size: 0.8rem;
+  }
+
+  .apply-confirm-modal__field input {
+    min-height: 44px;
+    padding: 0.68rem 0.78rem;
+    font-size: 0.9rem;
   }
 
   .apply-shoot-date-option {

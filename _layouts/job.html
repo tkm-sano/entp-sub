@@ -163,6 +163,7 @@
         <div class="apply-confirm-modal__step-indicator" aria-hidden="true">
           <span id="apply-step-chip-1" class="apply-confirm-modal__step-chip is-active">1 日程選択</span>
           <span id="apply-step-chip-2" class="apply-confirm-modal__step-chip">2 応募確認</span>
+          <span id="apply-step-chip-3" class="apply-confirm-modal__step-chip">3 入力</span>
         </div>
         <h2 id="apply-confirm-title">応募に進む</h2>
 
@@ -175,10 +176,6 @@
 
         <section id="apply-step-confirm" class="apply-confirm-step hidden">
           <h3 class="apply-confirm-modal__section-title">Step 2. キャンセルポリシーと応募内容の確認</h3>
-          <div class="apply-confirm-modal__selection-summary" aria-live="polite">
-            <p class="apply-confirm-modal__summary-label">選択した参加可能日程</p>
-            <p id="modal-selected-shoot-dates-summary" class="apply-confirm-modal__summary-value">-</p>
-          </div>
           <section class="apply-confirm-modal__policy-text" aria-label="キャンセルポリシー本文">
             <h3>第5条（キャンセルポリシー）</h3>
             <p>一度受諾した仕事をキャンセルする場合は、以下のポリシーが適用されます。</p>
@@ -198,9 +195,42 @@
               <span id="modal-consent-audience-text" class="job-consent__attention">募集対象：男女両方募集であり、対象であることを確認しました</span>
             </label>
           </div>
+        </section>
+
+        <section id="apply-step-profile" class="apply-confirm-step hidden">
+          <h3 class="apply-confirm-modal__section-title">Step 3. お名前とメールアドレス</h3>
+          <div class="apply-confirm-modal__selection-summary" aria-live="polite">
+            <p class="apply-confirm-modal__summary-label">選択した参加可能日程</p>
+            <p data-selected-shoot-dates-summary class="apply-confirm-modal__summary-value">-</p>
+          </div>
+          <section class="apply-confirm-modal__form-card" aria-label="お名前とメールアドレス">
+            <label class="apply-confirm-modal__field">
+              <span class="apply-confirm-modal__field-label">お名前</span>
+              <input
+                type="text"
+                id="modal-applicant-name"
+                name="applicantName"
+                autocomplete="name"
+                placeholder="例: 山田 花子"
+              >
+            </label>
+            <p id="modal-applicant-name-error" class="apply-confirm-modal__field-error hidden" role="alert"></p>
+            <label class="apply-confirm-modal__field">
+              <span class="apply-confirm-modal__field-label">メールアドレス</span>
+              <input
+                type="email"
+                id="modal-contact-email"
+                name="contactEmail"
+                inputmode="email"
+                autocomplete="email"
+                placeholder="example@example.com"
+              >
+            </label>
+            <p id="modal-contact-email-error" class="apply-confirm-modal__field-error hidden" role="alert"></p>
+          </section>
           <div class="apply-confirm-modal__actions">
-            <button type="button" id="back-to-shoot-date-selection" class="details-button">日程選択に戻る</button>
-            <button type="button" id="confirm-apply-button" class="apply-button">応募確定に進む</button>
+            <button type="button" id="back-to-apply-confirm" class="details-button">戻る</button>
+            <button type="button" id="submit-apply-button" class="apply-button">応募する</button>
           </div>
         </section>
       </div>
@@ -218,13 +248,19 @@
       const modalAudienceConsentText = document.getElementById("modal-consent-audience-text");
       const modalShootDateOptions = document.getElementById("modal-shoot-date-options");
       const modalShootDateEmpty = document.getElementById("modal-shoot-date-empty");
-      const modalSelectedShootDatesSummary = document.getElementById("modal-selected-shoot-dates-summary");
+      const modalSelectedShootDatesSummaryEls = Array.from(document.querySelectorAll("[data-selected-shoot-dates-summary]"));
+      const modalApplicantNameInput = document.getElementById("modal-applicant-name");
+      const modalApplicantNameError = document.getElementById("modal-applicant-name-error");
+      const modalContactEmailInput = document.getElementById("modal-contact-email");
+      const modalContactEmailError = document.getElementById("modal-contact-email-error");
       const selectDatesStep = document.getElementById("apply-step-select-dates");
       const confirmStep = document.getElementById("apply-step-confirm");
-      const backToShootDateSelectionButton = document.getElementById("back-to-shoot-date-selection");
+      const profileStep = document.getElementById("apply-step-profile");
+      const backToApplyConfirmButton = document.getElementById("back-to-apply-confirm");
       const applyStepChip1 = document.getElementById("apply-step-chip-1");
       const applyStepChip2 = document.getElementById("apply-step-chip-2");
-      const confirmApplyButton = document.getElementById("confirm-apply-button");
+      const applyStepChip3 = document.getElementById("apply-step-chip-3");
+      const submitApplyButton = document.getElementById("submit-apply-button");
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
       if (!applyButtons.length) return;
       let audienceConsentRequired = false;
@@ -523,7 +559,7 @@
       }
 
       function updateSelectedShootDatesSummary() {
-        if (!modalSelectedShootDatesSummary) {
+        if (!modalSelectedShootDatesSummaryEls.length) {
           return;
         }
 
@@ -531,15 +567,65 @@
           .map((value) => formatShootDateEntry(value))
           .join(" / ");
 
-        modalSelectedShootDatesSummary.textContent = summary || "未選択";
+        modalSelectedShootDatesSummaryEls.forEach((element) => {
+          element.textContent = summary || "未選択";
+        });
+      }
+
+      function setFieldError(errorEl, inputEl, message) {
+        if (errorEl) {
+          errorEl.textContent = message || "";
+          errorEl.classList.toggle("hidden", !message);
+        }
+
+        if (inputEl) {
+          inputEl.classList.toggle("is-error", Boolean(message));
+        }
+      }
+
+      function clearApplyProfileErrors() {
+        setFieldError(modalApplicantNameError, modalApplicantNameInput, "");
+        setFieldError(modalContactEmailError, modalContactEmailInput, "");
+      }
+
+      function validateApplyProfile() {
+        clearApplyProfileErrors();
+
+        const applicantName = String(modalApplicantNameInput?.value || "").trim();
+        const contactEmail = String(modalContactEmailInput?.value || "").trim();
+        let firstInvalidInput = null;
+
+        if (!applicantName) {
+          setFieldError(modalApplicantNameError, modalApplicantNameInput, "お名前を入力してください。");
+          firstInvalidInput = firstInvalidInput || modalApplicantNameInput;
+        }
+
+        if (!contactEmail) {
+          setFieldError(modalContactEmailError, modalContactEmailInput, "メールアドレスを入力してください。");
+          firstInvalidInput = firstInvalidInput || modalContactEmailInput;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+          setFieldError(modalContactEmailError, modalContactEmailInput, "正しいメールアドレスを入力してください。");
+          firstInvalidInput = firstInvalidInput || modalContactEmailInput;
+        }
+
+        if (firstInvalidInput) {
+          firstInvalidInput.focus();
+          return null;
+        }
+
+        return {
+          applicantName,
+          contactEmail
+        };
       }
 
       function setApplyModalStep(step) {
-        const isSelectStep = step !== 2;
-        selectDatesStep?.classList.toggle("hidden", !isSelectStep);
-        confirmStep?.classList.toggle("hidden", isSelectStep);
-        applyStepChip1?.classList.toggle("is-active", isSelectStep);
-        applyStepChip2?.classList.toggle("is-active", !isSelectStep);
+        selectDatesStep?.classList.toggle("hidden", step !== 1);
+        confirmStep?.classList.toggle("hidden", step !== 2);
+        profileStep?.classList.toggle("hidden", step !== 3);
+        applyStepChip1?.classList.toggle("is-active", step === 1);
+        applyStepChip2?.classList.toggle("is-active", step === 2);
+        applyStepChip3?.classList.toggle("is-active", step === 3);
       }
 
       function resetApplyModalState() {
@@ -548,24 +634,41 @@
         if (modalAudienceCheckbox) {
           modalAudienceCheckbox.checked = false;
         }
+        if (modalApplicantNameInput) {
+          modalApplicantNameInput.value = "";
+        }
+        if (modalContactEmailInput) {
+          modalContactEmailInput.value = "";
+        }
+        clearApplyProfileErrors();
+        setSubmitApplySubmittingState(false);
         Array.from(document.querySelectorAll('input[name="modal-shoot-date-option"]')).forEach((input) => {
           input.checked = false;
         });
         updateSelectedShootDatesSummary();
       }
 
-      function setConfirmApplySubmittingState(isSubmitting) {
-        if (!confirmApplyButton) return;
+      function setSubmitApplySubmittingState(isSubmitting) {
+        if (!submitApplyButton) return;
 
-        if (!confirmApplyButton.dataset.defaultLabel) {
-          confirmApplyButton.dataset.defaultLabel = confirmApplyButton.textContent || "応募確定に進む";
+        if (!submitApplyButton.dataset.defaultLabel) {
+          submitApplyButton.dataset.defaultLabel = submitApplyButton.textContent || "応募する";
         }
 
-        confirmApplyButton.disabled = isSubmitting;
-        confirmApplyButton.classList.toggle("is-submitting", isSubmitting);
-        confirmApplyButton.textContent = isSubmitting
+        submitApplyButton.disabled = isSubmitting;
+        submitApplyButton.classList.toggle("is-submitting", isSubmitting);
+        submitApplyButton.textContent = isSubmitting
           ? "応募送信中..."
-          : confirmApplyButton.dataset.defaultLabel;
+          : submitApplyButton.dataset.defaultLabel;
+      }
+
+      function advanceToProfileStepIfReady() {
+        if (!hasRequiredConsents()) {
+          return;
+        }
+
+        setApplyModalStep(3);
+        modalApplicantNameInput?.focus();
       }
 
       function setText(id, value) {
@@ -1186,7 +1289,7 @@
           closeConfirmModal();
         }
       });
-      backToShootDateSelectionButton?.addEventListener("click", () => {
+      backToApplyConfirmButton?.addEventListener("click", () => {
         setApplyModalStep(1);
       });
       modalShootDateOptions?.addEventListener("change", () => {
@@ -1201,6 +1304,18 @@
 
         setApplyModalStep(2);
       });
+      modalApplicantNameInput?.addEventListener("input", () => {
+        setFieldError(modalApplicantNameError, modalApplicantNameInput, "");
+      });
+      modalContactEmailInput?.addEventListener("input", () => {
+        setFieldError(modalContactEmailError, modalContactEmailInput, "");
+      });
+      modalCancelPolicyCheckbox?.addEventListener("change", () => {
+        advanceToProfileStepIfReady();
+      });
+      modalAudienceCheckbox?.addEventListener("change", () => {
+        advanceToProfileStepIfReady();
+      });
 
       applyButtons.forEach((applyTrigger) => {
         applyTrigger?.addEventListener("click", () => {
@@ -1208,27 +1323,22 @@
         });
       });
 
-      confirmApplyButton?.addEventListener("click", async () => {
-        if (confirmApplyButton.disabled) return;
+      submitApplyButton?.addEventListener("click", async () => {
+        if (submitApplyButton.disabled) return;
         if (!hasRequiredConsents()) { alert("参加可能な日程の選択、キャンセルポリシー、案件対象の確認が必要です。"); return; }
         if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }
         const selectedShootDates = getSelectedShootDates();
+        const profile = validateApplyProfile();
+        if (!profile) { return; }
 
-        const applicantName = (window.prompt("応募者名を入力してください") || "").trim();
-        if (!applicantName) { alert("応募者名を入力してください。"); return; }
-
-        const contactEmail = window.prompt("確認メールの送信先メールアドレスを入力してください");
-        if (!contactEmail || !contactEmail.trim()) { alert("メールアドレスを入力してください。"); return; }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) { alert("正しいメールアドレスを入力してください。"); return; }
-
-        setConfirmApplySubmittingState(true);
+        setSubmitApplySubmittingState(true);
 
         try {
           const payload = {
             action: "apply",
             jobId,
-            applicantName,
-            contactEmail: contactEmail.trim(),
+            applicantName: profile.applicantName,
+            contactEmail: profile.contactEmail,
             acceptedCancelPolicy: "true",
             acceptedShootDates: "true",
             selectedShootDates: selectedShootDates.join("\n")
@@ -1238,14 +1348,14 @@
 
           if (!data.ok) {
             alert(readableApiError(data));
-            setConfirmApplySubmittingState(false);
+            setSubmitApplySubmittingState(false);
             return;
           }
 
           alert("応募が完了しました。確認メールをご確認ください。");
           closeConfirmModal();
           resetApplyModalState();
-          setConfirmApplySubmittingState(false);
+          setSubmitApplySubmittingState(false);
 
           // 最新の案件情報を再取得して応募者リストを更新
           await loadJobDetail();
@@ -1253,7 +1363,7 @@
         } catch (err) {
           console.error(err);
           alert("通信エラーが発生しました。時間をおいて再度お試しください。");
-          setConfirmApplySubmittingState(false);
+          setSubmitApplySubmittingState(false);
         }
       });
     });
