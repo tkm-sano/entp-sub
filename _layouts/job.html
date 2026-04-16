@@ -331,7 +331,23 @@
         if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
         if (code === "forbidden") return "この操作を実行する権限がありません。";
         if (code === "invalid_email") return "確認メール送信先のメールアドレスが不正です。";
+        if (code === "model_not_found") return "モデルデータベースにお名前がありません。誤字・脱字がないかご確認ください。";
         return String(response?.message || "処理に失敗しました。");
+      }
+
+      function getApplyFieldError(response) {
+        const code = String(response?.errorCode || response?.code || "");
+        const message = readableApiError(response);
+
+        if (code === "model_not_found") {
+          return {
+            errorEl: modalApplicantNameError,
+            inputEl: modalApplicantNameInput,
+            message
+          };
+        }
+
+        return null;
       }
 
       function normalizeAudienceValue(value) {
@@ -1336,7 +1352,13 @@
           const data = await requestApply(payload, apiTimeoutMs);
 
           if (!data.ok) {
-            alert(readableApiError(data));
+            const fieldError = getApplyFieldError(data);
+            if (fieldError) {
+              setFieldError(fieldError.errorEl, fieldError.inputEl, fieldError.message);
+              fieldError.inputEl?.focus();
+            } else {
+              alert(readableApiError(data));
+            }
             setSubmitApplySubmittingState(false);
             return;
           }
