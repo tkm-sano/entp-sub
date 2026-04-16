@@ -2,6 +2,11 @@ name: Deploy Jobs to GitHub Pages
 
 on:
   workflow_dispatch:
+    inputs:
+      sheet_id:
+        description: Spreadsheet ID to publish from
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -91,7 +96,7 @@ jobs:
         shell: bash
         working-directory: .github/scripts
         env:
-          SHEET_ID: ${{ secrets.SHEET_ID }}
+          SHEET_ID: ${{ inputs.sheet_id || secrets.SHEET_ID }}
         run: |
           set +e
           node fetchJobs.mjs 2>&1 | tee "$WORKFLOW_SUMMARY_DIR/fetch-jobs.log"

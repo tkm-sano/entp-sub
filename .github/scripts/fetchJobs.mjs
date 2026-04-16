@@ -93,6 +93,15 @@ function getJobColumns(headers) {
   };
 }
 
+function resolveJobTitle(row, columns) {
+  return [
+    columns.title >= 0 ? row[columns.title] : '',
+    columns.productName >= 0 ? row[columns.productName] : '',
+  ]
+    .map(value => String(value || '').trim())
+    .find(Boolean) || '';
+}
+
 function buildJobId(row, columns, rowNumber) {
   const explicitId = columns.jobId >= 0 ? String(row[columns.jobId] || '').trim() : '';
   if (explicitId) {
@@ -218,12 +227,12 @@ async function fetchJobs() {
     const jobs = dataRows
       .map((row, index) => {
         const rowNumber = index + 2;
-        const title = String(row[columns.title] || '').trim();
+        const title = resolveJobTitle(row, columns);
 
         if (!title) {
           summary.skippedRows.push({
             rowNumber,
-            reason: '案件名が空です',
+            reason: '案件名・商品名が空です',
           });
           return null;
         }

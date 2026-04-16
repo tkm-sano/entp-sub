@@ -183,6 +183,7 @@ function triggerGitHubWorkflowDispatch_(ref) {
   const repo = mustGetScriptProperty_("GITHUB_REPO");
   const workflowId = getWorkflowId_();
   const token = mustGetScriptProperty_("GITHUB_TOKEN");
+  const spreadsheetId = getProperty_("SPREADSHEET_ID");
   const inputsJson = String(props.getProperty("GITHUB_WORKFLOW_INPUTS_JSON") || "").trim();
   const dispatchedAt = new Date();
   const existingRunIds = listWorkflowRuns_(owner, repo, workflowId, ref, token)
@@ -200,6 +201,10 @@ function triggerGitHubWorkflowDispatch_(ref) {
     } catch (err) {
       throw apiError_("config_error", `GITHUB_WORKFLOW_INPUTS_JSON が不正です: ${err.message}`);
     }
+  }
+
+  if (spreadsheetId && !inputs.sheet_id) {
+    inputs.sheet_id = spreadsheetId;
   }
 
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/${encodeURIComponent(workflowId)}/dispatches`;
@@ -640,7 +645,7 @@ function prepareJobRowForPublish_(sheet, rowNumber, cachedJobIdCol) {
   const columns = getJobColumns_(headers);
   const row = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
   const displayRow = sheet.getRange(rowNumber, 1, 1, lastCol).getDisplayValues()[0];
-  const title = String(colDisplay_(displayRow, columns.title, "") || "").trim();
+  const title = getJobTitleFromRow_(row, displayRow, columns);
 
   if (!title) {
     return "";
@@ -703,7 +708,7 @@ function syncApplicantListRow_(sheet, rowNumber) {
 
 function syncApplicantListRecord_(row, displayRow, headers, sheetRowNumber, columns, applicantStore) {
   const resolvedColumns = columns || getJobColumns_(headers);
-  const title = colDisplay_(displayRow, resolvedColumns.title, "");
+  const title = getJobTitleFromRow_(row, displayRow, resolvedColumns);
   if (!String(title || "").trim()) {
     return null;
   }
@@ -790,7 +795,7 @@ function apply_(params) {
     const sheetRowNumber = rowIndex + 1;
 
     const deadline = columns.deadline >= 0 ? row[columns.deadline] : "";
-    const title = String(displayRow[columns.title] || row[columns.title] || "");
+    const title = getJobTitleFromRow_(row, displayRow, columns);
     const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
     const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
     const applicantRecord = getApplicantRecordForJob_(applicantStore, generatedId, sourceKey);
@@ -958,7 +963,7 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
     appliedAtStr = String(appliedAt);
   }
 
-  pushLine("案件名", colDisplay_(displayRow, columns.title, "") || colValue_(row, columns.title, ""));
+  pushLine("案件名", getJobTitleFromRow_(row, displayRow, columns));
   pushLine("商品名", colDisplay_(displayRow, columns.productName, "") || colValue_(row, columns.productName, ""));
   pushLine("商品URL", colDisplay_(displayRow, columns.productUrl, "") || colValue_(row, columns.productUrl, ""));
   pushLine("報酬", rewardValue);
@@ -1365,7 +1370,7 @@ function onModelDecisionFormSubmit_(e) {
     const columns = getJobColumns_(headers);
     const row = sheet.getRange(rowNumber, 1, 1, lastCol).getValues()[0];
     const displayRow = sheet.getRange(rowNumber, 1, 1, lastCol).getDisplayValues()[0];
-    const title = String(colDisplay_(displayRow, columns.title, "") || colValue_(row, columns.title, "") || "").trim();
+    const title = getJobTitleFromRow_(row, displayRow, columns);
 
     const notifiedAtCol = ensureColumnByHeader_(sheet, "選考結果通知日時");
     const selectedModelsCol = ensureColumnByHeader_(sheet, "起用モデル名");
@@ -1515,7 +1520,7 @@ function notifyDeadlinePassed() {
     const deadline = row[columns.deadline];
     const notified = applicantRecord?.deadlineNotifiedAt || "";
     const clientEmails = getNotificationEmailsFromRow_(row, displayRow, columns);
-    const title = String(displayRow[columns.title] || row[columns.title] || "").trim();
+    const title = getJobTitleFromRow_(row, displayRow, columns);
     const applicantsText = applicantRecord?.applicantsText || "";
     const names = splitLines_(applicantsText);
     const existingFormUrl = modelDecisionFormUrlCol >= 0
@@ -2178,6 +2183,17 @@ function getOptionalProperty_(key) {
   return value == null ? "" : String(value).trim();
 }
 
+function getJobTitleFromRow_(row, displayRow, columns) {
+  return [
+    colDisplay_(displayRow, columns.title, ""),
+    colValue_(row, columns.title, ""),
+    colDisplay_(displayRow, columns.productName, ""),
+    colValue_(row, columns.productName, "")
+  ]
+    .map((value) => String(value || "").trim())
+    .find(Boolean) || "";
+}
+
 function ensureJobIdColumn_(sheet) {
   const headers = sheet
     .getRange(HEADER_ROW, 1, 1, Math.max(sheet.getLastColumn(), 1))
@@ -2359,7 +2375,7 @@ function getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, colum
   }
 
   const fallbackSeed = [
-    colDisplay_(displayRow, resolvedColumns.title, "") || colValue_(row, resolvedColumns.title, ""),
+    getJobTitleFromRow_(row, displayRow, resolvedColumns),
     colDisplay_(displayRow, resolvedColumns.productName, "") || colValue_(row, resolvedColumns.productName, ""),
     String(sheetRowNumber || "")
   ]
@@ -2381,7 +2397,7 @@ function getJobIdFromRow_(row, displayRow, headers, sheetRowNumber) {
   const columns = getJobColumns_(headers);
   const identitySource = [
     colDisplay_(displayRow, columns.timestamp, "") || colValue_(row, columns.timestamp, ""),
-    colDisplay_(displayRow, columns.title, "") || colValue_(row, columns.title, ""),
+    getJobTitleFromRow_(row, displayRow, columns),
     colDisplay_(displayRow, columns.productName, "") || colValue_(row, columns.productName, "")
   ]
     .map(value => String(value || "").trim())
