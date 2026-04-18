@@ -251,6 +251,7 @@
       const applyButtons = [button, secondaryApplyButton].filter(Boolean);
       if (!applyButtons.length) return;
       let audienceConsentRequired = false;
+      let isApplicationClosed = false;
       let currentShootDateOptions = [];
 
       const pageJobId = String((button?.dataset.jobId || secondaryApplyButton?.dataset.jobId || "")).trim();
@@ -329,6 +330,9 @@
         if (code === "consent_required") return "キャンセルポリシーと撮影候補日の確認が必要です。";
         if (code === "quota_full") return "応募人数が上限に達しています。";
         if (code === "deadline_passed") return "応募締切を過ぎたため応募できません。";
+        if (code === "job_hidden") return "現在非公開中のため応募できません。";
+        if (code === "job_paused") return "現在一時停止中のため応募できません。";
+        if (code === "job_closed") return "この案件は募集終了のため応募できません。";
         if (code === "forbidden") return "この操作を実行する権限がありません。";
         if (code === "invalid_email") return "確認メール送信先のメールアドレスが不正です。";
         if (code === "model_not_found") return "モデルデータベースにお名前がありません。誤字・脱字がないかご確認ください。";
@@ -449,6 +453,7 @@
 
       function openConfirmModal() {
         if (!modal) return;
+        if (isApplicationClosed) return;
         resetApplyModalState();
         modal.classList.remove("hidden");
       }
@@ -642,11 +647,43 @@
           submitApplyButton.dataset.defaultLabel = submitApplyButton.textContent || "応募する";
         }
 
-        submitApplyButton.disabled = isSubmitting;
+        submitApplyButton.disabled = isSubmitting || isApplicationClosed;
         submitApplyButton.classList.toggle("is-submitting", isSubmitting);
+        if (isApplicationClosed) {
+          submitApplyButton.textContent = String(
+            applyButtons.find((applyButton) => applyButton?.disabled)?.textContent || "応募停止中"
+          );
+          return;
+        }
+
         submitApplyButton.textContent = isSubmitting
           ? "応募送信中..."
           : submitApplyButton.dataset.defaultLabel;
+      }
+
+      function setApplyAvailability(availability) {
+        const applyClosed = !availability?.applyEnabled;
+        const buttonLabel = String(availability?.buttonLabel || "応募停止中");
+        isApplicationClosed = applyClosed;
+        applyButtons.forEach((applyButton) => {
+          if (!applyButton) return;
+
+          if (!applyButton.dataset.defaultLabel) {
+            applyButton.dataset.defaultLabel = applyButton.textContent || "応募する";
+          }
+
+          applyButton.disabled = isApplicationClosed;
+          applyButton.setAttribute("aria-disabled", isApplicationClosed ? "true" : "false");
+          applyButton.textContent = isApplicationClosed
+            ? buttonLabel
+            : applyButton.dataset.defaultLabel;
+        });
+
+        if (isApplicationClosed) {
+          closeConfirmModal();
+        }
+
+        setSubmitApplySubmittingState(false);
       }
 
       function advanceToProfileStepIfReady() {
@@ -883,9 +920,157 @@
         return Number.isNaN(parsed.getTime()) ? null : parsed;
       }
 
+      function normalizeToStartOfDay(date) {
+        const normalized = new Date(date.getTime());
+        normalized.setHours(0, 0, 0, 0);
+        return normalized;
+      }
+
+      function addMonthsPreservingDay(date, months) {
+        const base = normalizeToStartOfDay(date);
+        const day = base.getDate();
+        const shifted = new Date(base.getTime());
+        shifted.setDate(1);
+        shifted.setMonth(shifted.getMonth() + months);
+        const lastDayOfMonth = new Date(shifted.getFullYear(), shifted.getMonth() + 1, 0).getDate();
+        shifted.setDate(Math.min(day, lastDayOfMonth));
+        return normalizeToStartOfDay(shifted);
+      }
+
+      function getDeadlineState(deadline) {
+        const parsedDeadline = parseDeadlineDate(deadline);
+        if (!parsedDeadline || Number.isNaN(parsedDeadline.getTime())) {
+          return {
+            deadlineDate: null,
+            isClosed: false,
+            isArchived: false,
+            remainingLabel: calculateRemainingDays(deadline)
+          };
+        }
+
+        const today = normalizeToStartOfDay(new Date());
+        const deadlineDate = normalizeToStartOfDay(parsedDeadline);
+        const archiveDate = addMonthsPreservingDay(deadlineDate, 3);
+        const isClosed = deadlineDate < today;
+        const isArchived = archiveDate < today;
+
+        return {
+          deadlineDate,
+          isClosed,
+          isArchived,
+          remainingLabel: isClosed ? "募集終了" : calculateRemainingDays(deadline)
+        };
+      }
+
+      function normalizeDisplayStatus(value) {
+        const normalized = String(value || "")
+          .normalize("NFKC")
+          .replace(/\s+/g, "")
+          .toLowerCase();
+
+        if (!normalized || normalized === "表示" || normalized === "公開" || normalized === "published") {
+          return "visible";
+        }
+        if (normalized === "非表示" || normalized === "hidden") {
+          return "hidden";
+        }
+        if (normalized === "一時停止" || normalized === "停止" || normalized === "paused" || normalized === "pause") {
+          return "paused";
+        }
+        if (
+          normalized === "案件終了"
+          || normalized === "募集終了"
+          || normalized === "終了"
+          || normalized === "closed"
+        ) {
+          return "closed";
+        }
+
+        return "visible";
+      }
+
+      function getJobAvailability(job, getValue) {
+        const deadlineValue = getValue("deadline", "締切日", "締切");
+        const deadlineState = getDeadlineState(deadlineValue);
+        const manualStatus = normalizeDisplayStatus(
+          getValue("display_status", "表示状態", "公開状態", "掲載状態")
+        );
+
+        if (manualStatus === "hidden") {
+          return {
+            manualStatus,
+            deadlineState,
+            effectiveStatus: "hidden",
+            applyEnabled: false,
+            remainingLabel: deadlineState.remainingLabel,
+            buttonLabel: "応募する",
+            statusNote: ""
+          };
+        }
+
+        if (manualStatus === "paused") {
+          return {
+            manualStatus,
+            deadlineState,
+            effectiveStatus: "paused",
+            applyEnabled: false,
+            remainingLabel: deadlineState.remainingLabel,
+            buttonLabel: "応募する",
+            statusNote: ""
+          };
+        }
+
+        if (manualStatus === "closed") {
+          return {
+            manualStatus,
+            deadlineState,
+            effectiveStatus: "closed",
+            applyEnabled: false,
+            remainingLabel: "募集終了",
+            buttonLabel: "募集終了",
+            statusNote: "募集終了"
+          };
+        }
+
+        if (deadlineState.isArchived) {
+          return {
+            manualStatus,
+            deadlineState,
+            effectiveStatus: "archived",
+            applyEnabled: false,
+            remainingLabel: "募集終了",
+            buttonLabel: "募集終了",
+            statusNote: "募集終了"
+          };
+        }
+
+        if (deadlineState.isClosed) {
+          return {
+            manualStatus,
+            deadlineState,
+            effectiveStatus: "closed",
+            applyEnabled: false,
+            remainingLabel: "募集終了",
+            buttonLabel: "募集終了",
+            statusNote: "募集終了"
+          };
+        }
+
+        return {
+          manualStatus,
+          deadlineState,
+          effectiveStatus: "visible",
+          applyEnabled: true,
+          remainingLabel: deadlineState.remainingLabel,
+          buttonLabel: "応募する",
+          statusNote: ""
+        };
+      }
+
       function calculateRemainingDays(deadline) {
         if (!deadline) return "未定";
         const raw = String(deadline).normalize("NFKC").trim();
+        if (/^残り\s*0+\s*日$/.test(raw) || /^0+\s*日$/.test(raw)) return "本日締切";
         if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
         if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
         const today = new Date();
@@ -894,6 +1079,7 @@
         const diffMs = d.setHours(0,0,0,0) - today.setHours(0,0,0,0);
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         if (diffDays < 0) return "期限切れ";
+        if (diffDays === 0) return "本日締切";
         return `残り${diffDays}日`;
       }
 
@@ -1193,8 +1379,11 @@
         const shootingFormat = pickFirst(getValue("shooting_format", "shootingFormat", "撮影形式"));
         const usagePeriod = pickFirst(getValue("usage_period", "period", "使用期間"));
         const competition = pickFirst(getValue("competition", "conflict", "競合"));
-        const remainingSource = pickFirst(getValue("remaining", "残り日数"), getValue("deadline", "締切日", "締切"));
-        const remainingDays = calculateRemainingDays(remainingSource);
+        const deadlineValue = getValue("deadline", "締切日", "締切");
+        const remainingSource = pickFirst(getValue("remaining", "残り日数"), deadlineValue);
+        const availability = getJobAvailability(job, getValue);
+        const deadlineState = availability.deadlineState;
+        const remainingDays = availability.remainingLabel || calculateRemainingDays(remainingSource);
         const remainingBadge = document.getElementById("job-hero-remaining");
         const audienceChip = document.getElementById("job-audience-chip");
         const resolvedTitle = pickFirst(
@@ -1213,12 +1402,17 @@
         setTextOrFallback("job-hero-date", implementationDate, "-");
         setTextOrFallback("job-hero-location", location, "-");
         setText("job-hero-remaining", remainingDays);
-        setTextOrFallback("job-apply-deadline", formatDeadlineLabel(getValue("deadline", "締切日", "締切")), "締切：未定");
+        setTextOrFallback(
+          "job-apply-deadline",
+          `${formatDeadlineLabel(deadlineValue)}${availability.statusNote ? ` / ${availability.statusNote}` : ""}`,
+          "締切：未定"
+        );
         document.title = `${resolvedTitle} | 案件詳細`;
+        setApplyAvailability(availability);
 
         if (remainingBadge) {
           remainingBadge.classList.remove("job-chip--danger", "job-chip--expired", "job-chip--neutral");
-          if (remainingDays === "期限切れ") {
+          if (availability.effectiveStatus === "closed" || availability.effectiveStatus === "archived") {
             remainingBadge.classList.add("job-chip--expired");
           } else if (/^残り\d+日$/.test(remainingDays)) {
             remainingBadge.classList.add("job-chip--danger");
@@ -1329,6 +1523,7 @@
       });
 
       submitApplyButton?.addEventListener("click", async () => {
+        if (isApplicationClosed) return;
         if (submitApplyButton.disabled) return;
         if (!hasRequiredConsents()) { alert("参加可能な日程の選択、キャンセルポリシー、案件対象の確認が必要です。"); return; }
         if (!applyApiUrl) { alert("応募API設定が未完了です。env.js を確認してください。"); return; }

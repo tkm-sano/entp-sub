@@ -20,6 +20,7 @@ const DEFAULT_RETRY_BASE_MS = 250;
 const DEFAULT_GITHUB_WORKFLOW_ID = "deploy-jobs.yml";
 const GITHUB_RUN_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const GITHUB_RUN_POLL_INTERVAL_MS = 5000;
+const DEFAULT_DEADLINE_NOTIFICATION_HOUR = 9;
 const DEFAULT_TALENT_SPREADSHEET_ID = "1wiLixuePcfzZpzzVcZ7ulUsVNkvLunzucoqK6DH4M9M";
 const CLIENT_NOTIFICATION_CC = "kaito.suzuki@missconnect.jp";
 const MAIL_SENDER_NAME = "MissConnect";
@@ -38,6 +39,12 @@ const MODEL_DECISION_MESSAGE_TITLE = "モデルへの連絡事項";
 const JOB_STATUS_HEADER = "案件状況";
 const JOB_STATUS_WAITING_CLIENT = "クライアント連絡待ち";
 const JOB_STATUS_MODEL_DECIDED = "モデル決定済";
+const JOB_DISPLAY_STATUS_HEADER = "表示状態";
+const DEADLINE_NOTIFICATION_STATUS_HEADER = "締切通知状況";
+const JOB_DISPLAY_STATUS_VISIBLE = "表示";
+const JOB_DISPLAY_STATUS_HIDDEN = "非表示";
+const JOB_DISPLAY_STATUS_PAUSED = "一時停止";
+const JOB_DISPLAY_STATUS_ENDED = "案件終了";
 const MODEL_DECISION_RESPONSE_HEADERS = [
   "回答日時",
   "案件ID",
@@ -647,6 +654,8 @@ function prepareJobsForPublish_(sheet) {
     return;
   }
 
+  assignMissingJobIdsInChronologicalOrder_(sheet, jobIdCol);
+
   for (let rowNumber = HEADER_ROW + 1; rowNumber <= lastRow; rowNumber += 1) {
     prepareJobRowForPublish_(sheet, rowNumber, jobIdCol);
   }
@@ -684,6 +693,11 @@ function prepareJobRowForPublish_(sheet, rowNumber, cachedJobIdCol) {
     if (legacyJobIdCol >= 0 && legacyJobIdCol + 1 !== jobIdCol) {
       jobId = String(displayRow[legacyJobIdCol] || row[legacyJobIdCol] || "").trim();
     }
+  }
+
+  if (!jobId) {
+    assignMissingJobIdsInChronologicalOrder_(sheet, jobIdCol);
+    jobId = String(idCell.getDisplayValue()).trim();
   }
 
   if (!jobId) {
@@ -854,8 +868,9 @@ function apply_(params) {
     const appliedAtList = splitLines_(applicantRecord?.appliedAtText || "");
     const selectedShootDatesList = splitLines_(applicantRecord?.selectedShootDatesText || "");
 
-    if (isDeadlinePassed_(deadline)) {
-      throw apiError_("deadline_passed", "応募締切を過ぎています");
+    const availability = getJobApplicationAvailability_(row, displayRow, columns);
+    if (!availability.canApply) {
+      throw apiError_(availability.code, availability.message);
     }
 
     if (selectedShootDatesDisplay.some((value) => !value)) {
@@ -1030,6 +1045,140 @@ function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt,
 /* =========================================
    締切後通知（時間トリガーで定期実行）
 ========================================= */
+
+function notifyDeadlinePassed() {
+  const sheet = getJobsSheet_();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
+  if (values.length < 2) {
+    return;
+  }
+
+  const headers = values[0].map((h) => String(h).trim());
+  const columns = getJobColumns_(headers);
+  const applicantStore = getApplicantListStore_();
+
+  if (columns.title < 0 || columns.deadline < 0) {
+    return;
+  }
+
+  const notifiedAtCol = columns.notified >= 0
+    ? columns.notified + 1
+    : ensureColumnByHeader_(sheet, DEADLINE_NOTIFICATION_STATUS_HEADER);
+  const now = new Date();
+  const users = readUsers_();
+  const pageUrlByName = {};
+
+  users.forEach((user) => {
+    if (user?.normalizedName) {
+      pageUrlByName[user.normalizedName] = String(user.pageUrl || "").trim();
+    }
+  });
+
+  values.slice(1).forEach((row, i) => {
+    const displayRow = displayValues[i + 1] || [];
+    const sheetRowNumber = i + 2;
+    const generatedId = getJobIdFromRow_(row, displayRow, headers, sheetRowNumber);
+    const sourceKey = getJobSourceKeyFromRow_(row, displayRow, headers, sheetRowNumber, columns);
+    const applicantRecord = getApplicantRecordForJob_(applicantStore, generatedId, sourceKey);
+    const canonicalJobId = resolvePreferredJobId_(generatedId, applicantRecord?.jobId);
+    const deadline = colValue_(row, columns.deadline, "") || colDisplay_(displayRow, columns.deadline, "");
+    const notified = String(sheet.getRange(sheetRowNumber, notifiedAtCol).getDisplayValue() || "").trim();
+    const clientEmails = getNotificationEmailsFromRow_(row, displayRow, columns);
+    const title = getJobTitleFromRow_(row, displayRow, columns);
+    const applicantsText = applicantRecord?.applicantsText || "";
+    const names = splitLines_(applicantsText);
+
+    if (!deadline || notified || clientEmails.length === 0 || !title) {
+      return;
+    }
+
+    const deadlineDate = parseDate_(deadline);
+    if (!deadlineDate) {
+      return;
+    }
+
+    const notifyAt = new Date(deadlineDate);
+    notifyAt.setDate(notifyAt.getDate() + 1);
+    notifyAt.setHours(getDeadlineNotificationHour_(), 0, 0, 0);
+
+    if (now < notifyAt) {
+      return;
+    }
+
+    const applicantContacts = buildApplicantContactsFromRecord_(applicantRecord);
+    const applicantLines = applicantContacts.map((contact) => {
+      const url = pageUrlByName[contact.normalizedName] || "（URLなし）";
+      const selectedDates = String(contact.selectedShootDates || "").trim();
+      return [
+        `・${contact.rawName}`,
+        `  ${url}`,
+        selectedDates ? `  参加可能日程: ${selectedDates}` : "  参加可能日程: （未回答）"
+      ].join("\n");
+    });
+
+    const formInfo = names.length > 0
+      ? ensureModelDecisionFormForJob_(sheet, sheetRowNumber, title, names)
+      : { url: "", editUrl: "" };
+
+    const deadlineStr = Utilities.formatDate(deadlineDate, TZ, "yyyy年MM月dd日");
+    const subject = `【応募者一覧】${title}`;
+    const body = [
+      "お世話になっております。MissConnectでございます。",
+      "",
+      `「${title}」につきまして、${deadlineStr}をもちまして応募受付を終了いたしました。`,
+      "応募状況を以下のとおりご共有申し上げます。",
+      "",
+      `応募者数：${names.length}名`,
+      "",
+      "■ 応募者一覧",
+      applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）",
+      "",
+      ...(formInfo.url ? [
+        "起用するモデルが決まりましたら、以下のフォームよりご回答ください。",
+        formInfo.url,
+        ""
+      ] : []),
+      "ご確認のほど、よろしくお願いいたします。",
+      "ご不明な点等がございましたら、お気軽にご連絡ください。",
+      "",
+      "何卒よろしくお願いいたします。",
+      "",
+      "MissConnect"
+    ].join("\n");
+
+    sendMail_(clientEmails.join(","), subject, body, {
+      cc: CLIENT_NOTIFICATION_CC
+    });
+
+    if (formInfo.url) {
+      setJobStatus_(sheet, sheetRowNumber, JOB_STATUS_WAITING_CLIENT);
+    }
+
+    sheet.getRange(sheetRowNumber, notifiedAtCol).setValue(
+      `完了：${Utilities.formatDate(new Date(), TZ, "yyyy/MM/dd HH:mm")}`
+    );
+
+    upsertApplicantRecord_(applicantStore, {
+      jobId: canonicalJobId,
+      sourceKey,
+      title,
+      applicantCount: names.length,
+      applicantsText,
+      applicantEmailsText: applicantRecord?.applicantEmailsText || "",
+      cancelPolicyConsentsText: applicantRecord?.cancelPolicyConsentsText || "",
+      cancelPolicyCheckedAtText: applicantRecord?.cancelPolicyCheckedAtText || "",
+      appliedAtText: applicantRecord?.appliedAtText || "",
+      deadline: String(deadline || "").trim(),
+      selectedShootDatesText: applicantRecord?.selectedShootDatesText || ""
+    });
+  });
+}
+
+function sendDeadlineMorningEmails() {
+  notifyDeadlinePassed();
+}
 
 function ensureModelDecisionFormSubmitTrigger_(form) {
   const formId = form.getId();
@@ -1691,6 +1840,7 @@ function getJobColumns_(headers) {
     remaining: find("残り日数"),
     selection: find("選考方法", "selection_method"),
     deadline: find("締切日", "deadline", "締切"),
+    displayStatus: find(JOB_DISPLAY_STATUS_HEADER, "display_status", "公開状態", "掲載状態"),
     emergencyContact: find("撮影当日の緊急連絡先", "緊急連絡先", "emergency_contact"),
     email: find("ご担当者様のメールアドレス①", "担当者メールアドレス①", "client_email", "クライアントE-mail", "クライアントEmail", "クライアントメール"),
     email2: find("【任意】ご担当者様のメールアドレス②", "ご担当者様のメールアドレス②", "担当者メールアドレス②", "client_email_2"),
@@ -1698,7 +1848,7 @@ function getJobColumns_(headers) {
     form: find("form_url"),
     category: find("category"),
     count: find("applicant_count"),
-    notified: find("deadline_notified_at", "締切通知日時", "通知日時"),
+    notified: find(DEADLINE_NOTIFICATION_STATUS_HEADER, "deadline_notified_at", "締切通知日時", "通知日時"),
     applicants: find("applicants", "応募者", "応募者名")
   };
 }
@@ -2159,32 +2309,127 @@ function generateNextJobId_(sheet, jobIdCol) {
   const existingValues = lastRow > HEADER_ROW
     ? sheet.getRange(HEADER_ROW + 1, jobIdCol, lastRow - HEADER_ROW, 1).getDisplayValues().flat()
     : [];
-  let maxSequence = 0;
+  const usedSequences = {};
 
   existingValues.forEach((value) => {
-    const text = String(value || "").trim();
-    const match = text.match(/^job-(\d+)$/i);
-    if (match) {
-      const sequence = Number(match[1]);
-      if (Number.isFinite(sequence)) {
-        maxSequence = Math.max(maxSequence, sequence);
+    const sequence = parseJobIdSequence_(value);
+    if (!Number.isFinite(sequence) || sequence <= 0) {
+      return;
+    }
+    usedSequences[sequence] = true;
+  });
+
+  let nextSequence = 1;
+  while (usedSequences[nextSequence]) {
+    nextSequence += 1;
+  }
+
+  return formatJobIdSequence_(nextSequence);
+}
+
+function assignMissingJobIdsInChronologicalOrder_(sheet, jobIdCol) {
+  if (!sheet) {
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow <= HEADER_ROW || lastCol <= 0) {
+    return;
+  }
+
+  const headers = sheet
+    .getRange(HEADER_ROW, 1, 1, lastCol)
+    .getDisplayValues()[0]
+    .map((h) => String(h || "").trim());
+  const columns = getJobColumns_(headers);
+  const values = sheet.getRange(HEADER_ROW + 1, 1, lastRow - HEADER_ROW, lastCol).getValues();
+  const displayValues = sheet.getRange(HEADER_ROW + 1, 1, lastRow - HEADER_ROW, lastCol).getDisplayValues();
+  const legacyJobIdCol = findColumn_(headers, "job_id", "id");
+  const usedSequences = {};
+  const rowsToAssign = [];
+
+  values.forEach((row, index) => {
+    const displayRow = displayValues[index] || [];
+    const rowNumber = HEADER_ROW + 1 + index;
+    const title = getJobTitleFromRow_(row, displayRow, columns);
+
+    if (!title) {
+      return;
+    }
+
+    const mainJobId = String(displayRow[jobIdCol - 1] || row[jobIdCol - 1] || "").trim();
+    const legacyJobId = legacyJobIdCol >= 0 && legacyJobIdCol + 1 !== jobIdCol
+      ? String(displayRow[legacyJobIdCol] || row[legacyJobIdCol] || "").trim()
+      : "";
+    const resolvedJobId = mainJobId || legacyJobId;
+    const sequence = parseJobIdSequence_(resolvedJobId);
+
+    if (resolvedJobId) {
+      if (!mainJobId) {
+        sheet.getRange(rowNumber, jobIdCol).setValue(resolvedJobId);
+      }
+
+      if (Number.isFinite(sequence) && sequence > 0) {
+        usedSequences[sequence] = true;
       }
       return;
     }
 
-    const legacyMatch = text.match(/^job_(?:\d{8}_)?(\d+)$/i);
-    if (!legacyMatch) {
-      return;
-    }
+    const timestampValue = columns.timestamp >= 0
+      ? (colValue_(row, columns.timestamp, "") || colDisplay_(displayRow, columns.timestamp, ""))
+      : "";
+    const timestampDate = parseDate_(timestampValue);
 
-    const legacySequence = Number(legacyMatch[1]);
-    if (Number.isFinite(legacySequence)) {
-      maxSequence = Math.max(maxSequence, legacySequence);
-    }
+    rowsToAssign.push({
+      rowNumber,
+      timestampMs: timestampDate ? timestampDate.getTime() : Number.POSITIVE_INFINITY
+    });
   });
 
-  const nextSequence = String(maxSequence + 1).padStart(JOB_ID_SEQUENCE_WIDTH, "0");
-  return `${JOB_ID_PREFIX}${nextSequence}`;
+  rowsToAssign.sort((a, b) => {
+    if (a.timestampMs !== b.timestampMs) {
+      return a.timestampMs - b.timestampMs;
+    }
+
+    return a.rowNumber - b.rowNumber;
+  });
+
+  let nextSequence = 1;
+  rowsToAssign.forEach((entry) => {
+    while (usedSequences[nextSequence]) {
+      nextSequence += 1;
+    }
+
+    sheet.getRange(entry.rowNumber, jobIdCol).setValue(formatJobIdSequence_(nextSequence));
+    usedSequences[nextSequence] = true;
+    nextSequence += 1;
+  });
+}
+
+function parseJobIdSequence_(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return NaN;
+  }
+
+  const match = text.match(/^job-(\d+)$/i);
+  if (match) {
+    const sequence = Number(match[1]);
+    return Number.isFinite(sequence) ? sequence : NaN;
+  }
+
+  const legacyMatch = text.match(/^job_(?:\d{8}_)?(\d+)$/i);
+  if (!legacyMatch) {
+    return NaN;
+  }
+
+  const legacySequence = Number(legacyMatch[1]);
+  return Number.isFinite(legacySequence) ? legacySequence : NaN;
+}
+
+function formatJobIdSequence_(sequence) {
+  return `${JOB_ID_PREFIX}${String(sequence).padStart(JOB_ID_SEQUENCE_WIDTH, "0")}`;
 }
 
 function buildJobPageUrl_(jobId) {
@@ -2263,6 +2508,15 @@ function getTalentUsersCacheSeconds_() {
     return DEFAULT_TALENT_USERS_CACHE_SECONDS;
   }
   return Math.min(Math.floor(parsed), 21600);
+}
+
+function getDeadlineNotificationHour_() {
+  const raw = getOptionalProperty_("DEADLINE_NOTIFICATION_HOUR");
+  const parsed = Number(raw);
+  if (!raw || !Number.isFinite(parsed) || parsed < 0 || parsed > 23) {
+    return DEFAULT_DEADLINE_NOTIFICATION_HOUR;
+  }
+  return Math.floor(parsed);
 }
 
 function getTalentSpreadsheetId_() {
@@ -2515,8 +2769,90 @@ function isDeadlinePassed_(deadlineValue) {
   return d < today;
 }
 
+function normalizeJobDisplayStatus_(value) {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+
+  if (!normalized || normalized === "表示" || normalized === "公開" || normalized === "published") {
+    return JOB_DISPLAY_STATUS_VISIBLE;
+  }
+  if (normalized === "非表示" || normalized === "hidden") {
+    return JOB_DISPLAY_STATUS_HIDDEN;
+  }
+  if (normalized === "一時停止" || normalized === "停止" || normalized === "paused" || normalized === "pause") {
+    return JOB_DISPLAY_STATUS_PAUSED;
+  }
+  if (
+    normalized === "案件終了"
+    || normalized === "募集終了"
+    || normalized === "終了"
+    || normalized === "closed"
+  ) {
+    return JOB_DISPLAY_STATUS_ENDED;
+  }
+
+  return JOB_DISPLAY_STATUS_VISIBLE;
+}
+
+function getJobDisplayStatusFromRow_(row, displayRow, columns) {
+  const raw = columns.displayStatus >= 0
+    ? (colDisplay_(displayRow, columns.displayStatus, "") || colValue_(row, columns.displayStatus, ""))
+    : "";
+  return normalizeJobDisplayStatus_(raw);
+}
+
+function getJobApplicationAvailability_(row, displayRow, columns) {
+  const displayStatus = getJobDisplayStatusFromRow_(row, displayRow, columns);
+
+  if (displayStatus === JOB_DISPLAY_STATUS_HIDDEN) {
+    return {
+      canApply: false,
+      code: "job_hidden",
+      message: "現在非公開中のため応募できません"
+    };
+  }
+
+  if (displayStatus === JOB_DISPLAY_STATUS_PAUSED) {
+    return {
+      canApply: false,
+      code: "job_paused",
+      message: "現在一時停止中のため応募できません"
+    };
+  }
+
+  if (displayStatus === JOB_DISPLAY_STATUS_ENDED) {
+    return {
+      canApply: false,
+      code: "job_closed",
+      message: "この案件は募集終了のため応募できません"
+    };
+  }
+
+  const deadline = columns.deadline >= 0
+    ? (colValue_(row, columns.deadline, "") || colDisplay_(displayRow, columns.deadline, ""))
+    : "";
+  if (isDeadlinePassed_(deadline)) {
+    return {
+      canApply: false,
+      code: "deadline_passed",
+      message: "応募締切を過ぎています"
+    };
+  }
+
+  return {
+    canApply: true,
+    code: "",
+    message: ""
+  };
+}
+
 function calculateRemainingDaysLabel_(deadlineValue) {
   const raw = String(deadlineValue || "").normalize("NFKC").trim();
+  if (/^残り\s*0+\s*日$/.test(raw) || /^0+\s*日$/.test(raw)) {
+    return "本日締切";
+  }
   if (/^残り\s*\d+\s*日$/.test(raw)) {
     return raw.replace(/\s+/g, "");
   }
@@ -2538,6 +2874,9 @@ function calculateRemainingDaysLabel_(deadlineValue) {
 
   if (diffDays < 0) {
     return "期限切れ";
+  }
+  if (diffDays === 0) {
+    return "本日締切";
   }
   return `残り${diffDays}日`;
 }

@@ -986,6 +986,7 @@ body[data-page="jobs"] .job-card {
 }
 
 body[data-page="jobs"] .job-card__thumb {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -1002,6 +1003,39 @@ body[data-page="jobs"] .job-card__thumb img {
   height: 100%;
   display: block;
   object-fit: cover;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+body[data-page="jobs"] .job-card--closed .job-card__thumb img {
+  filter: grayscale(1);
+  transform: scale(1.02);
+}
+
+body[data-page="jobs"] .job-card__status-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: min(76%, 210px);
+  padding: 0.8rem 1rem;
+  background: rgba(24, 24, 24, 0.72);
+  color: #ffffff;
+  font-size: clamp(1rem, 1.4vw, 1.35rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-indent: 0.14em;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+body[data-page="jobs"] .job-card__remaining--closed {
+  background: rgba(70, 70, 70, 0.12);
+  color: #555555;
 }
 
 body[data-page="jobs"] .job-card__header {
@@ -2029,7 +2063,10 @@ body[data-page="job"] {
 #apply-button:disabled,
 #apply-button-bottom:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 1;
+  background: #9aa6b2;
+  color: #ffffff;
+  box-shadow: none;
 }
 
 @media (max-width: 768px) {

@@ -120,9 +120,165 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  function normalizeToStartOfDay(date) {
+    const normalized = new Date(date.getTime());
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  }
+
+  function addMonthsPreservingDay(date, months) {
+    const base = normalizeToStartOfDay(date);
+    const day = base.getDate();
+    const shifted = new Date(base.getTime());
+    shifted.setDate(1);
+    shifted.setMonth(shifted.getMonth() + months);
+    const lastDayOfMonth = new Date(shifted.getFullYear(), shifted.getMonth() + 1, 0).getDate();
+    shifted.setDate(Math.min(day, lastDayOfMonth));
+    return normalizeToStartOfDay(shifted);
+  }
+
+  function getDeadlineState(deadline) {
+    const parsedDeadline = parseDeadlineDate(deadline);
+    if (!parsedDeadline || Number.isNaN(parsedDeadline.getTime())) {
+      return {
+        deadlineDate: null,
+        isClosed: false,
+        isArchived: false,
+        remainingLabel: calculateRemainingDays(deadline),
+        sortPriority: 0
+      };
+    }
+
+    const today = normalizeToStartOfDay(new Date());
+    const deadlineDate = normalizeToStartOfDay(parsedDeadline);
+    const archiveDate = addMonthsPreservingDay(deadlineDate, 3);
+    const isClosed = deadlineDate < today;
+    const isArchived = archiveDate < today;
+
+    return {
+      deadlineDate,
+      isClosed,
+      isArchived,
+      remainingLabel: isClosed ? "募集終了" : calculateRemainingDays(deadline),
+      sortPriority: isClosed ? 1 : 0
+    };
+  }
+
+  function normalizeDisplayStatus(value) {
+    const normalized = String(value || "")
+      .normalize("NFKC")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+
+    if (!normalized || normalized === "表示" || normalized === "公開" || normalized === "published") {
+      return "visible";
+    }
+    if (normalized === "非表示" || normalized === "hidden") {
+      return "hidden";
+    }
+    if (normalized === "一時停止" || normalized === "停止" || normalized === "paused" || normalized === "pause") {
+      return "paused";
+    }
+    if (
+      normalized === "案件終了"
+      || normalized === "募集終了"
+      || normalized === "終了"
+      || normalized === "closed"
+    ) {
+      return "closed";
+    }
+
+    return "visible";
+  }
+
+  function getJobAvailability(job, getValue) {
+    const deadlineValue = getValue("deadline", "締切日", "締切");
+    const deadlineState = getDeadlineState(deadlineValue);
+    const manualStatus = normalizeDisplayStatus(
+      getValue("display_status", "表示状態", "公開状態", "掲載状態")
+    );
+
+    if (manualStatus === "hidden") {
+      return {
+        manualStatus,
+        deadlineState,
+        effectiveStatus: "hidden",
+        listVisible: false,
+        applyEnabled: false,
+        remainingLabel: deadlineState.remainingLabel,
+        sortPriority: 3,
+        statusNote: ""
+      };
+    }
+
+    if (manualStatus === "paused") {
+      return {
+        manualStatus,
+        deadlineState,
+        effectiveStatus: "paused",
+        listVisible: true,
+        applyEnabled: false,
+        remainingLabel: deadlineState.remainingLabel,
+        sortPriority: 1,
+        statusNote: ""
+      };
+    }
+
+    if (manualStatus === "closed") {
+      return {
+        manualStatus,
+        deadlineState,
+        effectiveStatus: "closed",
+        listVisible: true,
+        applyEnabled: false,
+        remainingLabel: "募集終了",
+        sortPriority: 2,
+        statusNote: "募集終了"
+      };
+    }
+
+    if (deadlineState.isArchived) {
+      return {
+        manualStatus,
+        deadlineState,
+        effectiveStatus: "archived",
+        listVisible: false,
+        applyEnabled: false,
+        remainingLabel: "募集終了",
+        sortPriority: 3,
+        statusNote: "募集終了"
+      };
+    }
+
+    if (deadlineState.isClosed) {
+      return {
+        manualStatus,
+        deadlineState,
+        effectiveStatus: "closed",
+        listVisible: true,
+        applyEnabled: false,
+        remainingLabel: "募集終了",
+        sortPriority: 2,
+        statusNote: "募集終了"
+      };
+    }
+
+    return {
+      manualStatus,
+      deadlineState,
+      effectiveStatus: "visible",
+      listVisible: true,
+      applyEnabled: true,
+      remainingLabel: deadlineState.remainingLabel,
+      sortPriority: 0,
+      statusNote: ""
+    };
+  }
+
   function calculateRemainingDays(deadline) {
     if (!deadline) return "未定";
     const raw = String(deadline).normalize("NFKC").trim();
+    if (/^残り\s*0+\s*日$/.test(raw) || /^0+\s*日$/.test(raw)) return "本日締切";
     if (/^残り\s*\d+\s*日$/.test(raw)) return raw.replace(/\s+/g, "");
     if (/^\d+\s*日$/.test(raw)) return `残り${raw.replace(/\s+/g, "")}`;
     const today = new Date();
@@ -133,6 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) return "期限切れ";
+    if (diffDays === 0) return "本日締切";
     return `残り${diffDays}日`;
   }
 
@@ -640,20 +797,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const wageRange = jobEls.wageRangeFilter?.value || "";
     const audienceFilter = state.audienceFilter || "all";
 
-    const filtered = state.jobs.filter(job => {
+    const filtered = state.jobs.map((job, index) => {
+      const getValue = createJobValueResolver(job);
+      return {
+        job,
+        index,
+        getValue,
+        availability: getJobAvailability(job, getValue)
+      };
+    }).filter(({ job, getValue, availability }) => {
       if (keyword && !JSON.stringify(job).toLowerCase().includes(keyword)) return false;
       if (!matchesAudienceFilter(job, audienceFilter)) return false;
-
-      const getValue = createJobValueResolver(job);
-      const deadlineValue = getValue("deadline", "締切日", "締切");
-      if (deadlineValue) {
-        const deadlineDate = parseDeadlineDate(deadlineValue);
-        if (deadlineDate && !Number.isNaN(deadlineDate.getTime())) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          deadlineDate.setHours(0, 0, 0, 0);
-          if (deadlineDate < today) return false;
-        }
+      if (!availability.listVisible) {
+        return false;
       }
       
       // 時給フィルター
@@ -673,6 +829,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       return true;
+    }).sort((a, b) => {
+      if (a.availability.sortPriority !== b.availability.sortPriority) {
+        return a.availability.sortPriority - b.availability.sortPriority;
+      }
+
+      return a.index - b.index;
     });
 
     const totalCount = filtered.length;
@@ -693,13 +855,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    jobEls.jobsList.innerHTML = visible.map(job => {
-      const getValue = createJobValueResolver(job);
+    jobEls.jobsList.innerHTML = visible.map(({ job, getValue, availability }) => {
       const remainingSource = pickFirst(
         getValue("remaining", "残り日数"),
         getValue("deadline", "締切日", "締切")
       );
-      const remainingDays = calculateRemainingDays(remainingSource);
+      const remainingDays = availability.remainingLabel || calculateRemainingDays(remainingSource);
       const category = escapeHtml(String(
         pickFirst(
           getValue("category", "カテゴリ"),
@@ -748,13 +909,18 @@ document.addEventListener("DOMContentLoaded", () => {
         )
       ));
       const thumbnailUrl = resolveThumbnailUrl(job);
+      const closedBadgeMarkup = availability.effectiveStatus === "closed"
+        ? '<span class="job-card__status-badge">募集終了</span>'
+        : "";
       const thumbnailMarkup = thumbnailUrl
-        ? `<div class="job-card__thumb"><img src="${escapeHtml(thumbnailUrl)}" alt="${title} のサムネイル" loading="lazy"></div>`
-        : `<div class="job-card__thumb job-card__thumb--empty" aria-hidden="true"></div>`;
+        ? `<div class="job-card__thumb"><img src="${escapeHtml(thumbnailUrl)}" alt="${title} のサムネイル" loading="lazy">${closedBadgeMarkup}</div>`
+        : `<div class="job-card__thumb job-card__thumb--empty" aria-hidden="true">${closedBadgeMarkup}</div>`;
+      const cardClasses = `job-card${availability.effectiveStatus === "closed" ? " job-card--closed" : ""}`;
+      const remainingClasses = `job-card__remaining${availability.effectiveStatus === "closed" ? " job-card__remaining--closed" : ""}`;
 
       return `
         <a class="job-card-link" href="${jobsBase}${encodedJobId}/">
-          <div class="job-card">
+          <div class="${cardClasses}">
             ${thumbnailMarkup}
             <div class="job-card__header">
               <div class="job-card__header-top">
@@ -762,7 +928,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   <span class="job-card__category">${category}</span>
                   <span class="job-card__audience">${audienceLabel}</span>
                 </div>
-                <span class="job-card__remaining">${escapeHtml(remainingDays)}</span>
+                <span class="${remainingClasses}">${escapeHtml(remainingDays)}</span>
               </div>
               <h3 class="job-card__title">${title}</h3>
             </div>
