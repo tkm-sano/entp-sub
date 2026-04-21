@@ -220,7 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
         applyEnabled: false,
         remainingLabel: deadlineState.remainingLabel,
         sortPriority: 1,
-        statusNote: ""
+        statusNote: "一時募集停止中"
       };
     }
 
