@@ -1286,8 +1286,9 @@ function syncModelDecisionFormSelectionItems_(form, applicantNames) {
 
   [primaryItem, secondaryItem, tertiaryItem].forEach((item) => {
     const memoIndex = form.getItems().findIndex((formItem) => formItem.getId() === memoItem.getId());
-    if (memoIndex >= 0) {
-      form.moveItem(item, memoIndex);
+    const itemIndex = form.getItems().findIndex((formItem) => formItem.getId() === item.getId());
+    if (memoIndex >= 0 && itemIndex >= 0) {
+      form.moveItem(itemIndex, memoIndex);
     }
   });
 }
