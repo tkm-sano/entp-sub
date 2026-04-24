@@ -24,6 +24,8 @@ const DEFAULT_DEADLINE_NOTIFICATION_HOUR = 9;
 const DEFAULT_TALENT_SPREADSHEET_ID = "1wiLixuePcfzZpzzVcZ7ulUsVNkvLunzucoqK6DH4M9M";
 const CLIENT_NOTIFICATION_CC = "kaito.suzuki@missconnect.jp";
 const MAIL_SENDER_NAME = "MissConnect";
+const MAIL_SENDER_EMAIL = "info@missconnect.jp";
+const STORED_TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm";
 const JOB_ID_HEADER = "案件ID";
 const JOB_ID_PREFIX = "job-";
 const JOB_ID_FALLBACK_PREFIX = "job_tmp_";
@@ -813,7 +815,7 @@ function apply_(params) {
   if (tokenPayload?.jobId && String(tokenPayload.jobId).trim() !== jobId) {
     throw apiError_("invalid_token", "token jobId 不一致");
   }
-  const applicationTimestamp = new Date().toISOString();
+  const applicationTimestamp = formatStoredTimestamp_(new Date());
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1571,9 +1573,7 @@ function onModelDecisionFormSubmit_(e) {
     const selectedNames = getSelectedModelNamesFromResponseMap_(responseMap);
     const clientMessage = String(responseMap[MODEL_DECISION_MESSAGE_TITLE] || "").trim();
     const submittedAt = e?.response?.getTimestamp ? e.response.getTimestamp() : new Date();
-    const submittedAtIso = parseDate_(submittedAt)
-      ? parseDate_(submittedAt).toISOString()
-      : new Date().toISOString();
+    const submittedAtIso = formatStoredTimestamp_(submittedAt || new Date());
 
     if (selectedNames.length === 0) {
       sheet.getRange(rowNumber, errorCol).setValue("起用するモデル名が未入力です。");
@@ -1654,7 +1654,7 @@ function onModelDecisionFormSubmit_(e) {
       selectedTertiary: responseMap[MODEL_DECISION_TERTIARY_TITLE],
       clientMessage
     });
-    sheet.getRange(rowNumber, notifiedAtCol).setValue(new Date().toISOString());
+    sheet.getRange(rowNumber, notifiedAtCol).setValue(formatStoredTimestamp_(new Date()));
     setJobStatus_(sheet, rowNumber, JOB_STATUS_MODEL_DECIDED);
     sheet.getRange(rowNumber, memoCol).setValue(
       skippedNames.length > 0
@@ -1731,7 +1731,7 @@ function getApplicantRecordForJob_(store, jobId, sourceKey) {
 function upsertApplicantRecord_(store, recordInput) {
   const record = getApplicantRecordForJob_(store, recordInput.jobId, recordInput.sourceKey);
   const sheet = store.sheet;
-  const nowIso = new Date().toISOString();
+  const nowIso = formatStoredTimestamp_(new Date());
   const previousJobId = String(record?.jobId || "").trim();
   const nextJobId = resolvePreferredJobId_(recordInput.jobId, previousJobId);
   const resolvedApplicantsText = String(recordInput.applicantsText ?? record?.applicantsText ?? "").trim();
@@ -2756,6 +2756,11 @@ function parseDate_(value) {
   return parsed;
 }
 
+function formatStoredTimestamp_(value) {
+  const date = parseDate_(value);
+  return date ? Utilities.formatDate(date, TZ, STORED_TIMESTAMP_FORMAT) : "";
+}
+
 function isDeadlinePassed_(deadlineValue) {
   const d = parseDate_(deadlineValue);
   if (!d) {
@@ -2955,10 +2960,26 @@ function apiError_(code, message) {
 
 function sendMail_(to, subject, body, options) {
   const mailOptions = Object.assign({
-    name: MAIL_SENDER_NAME
+    name: MAIL_SENDER_NAME,
+    replyTo: MAIL_SENDER_EMAIL
   }, options || {});
 
-  MailApp.sendEmail(to, subject, body, mailOptions);
+  const senderEmail = MAIL_SENDER_EMAIL.toLowerCase();
+  const activeUserEmail = String(Session.getActiveUser().getEmail() || "").trim().toLowerCase();
+  const aliases = GmailApp.getAliases()
+    .map((alias) => String(alias || "").trim().toLowerCase())
+    .filter(Boolean);
+  const canSendFromConfiguredAddress = senderEmail === activeUserEmail || aliases.includes(senderEmail);
+
+  if (!canSendFromConfiguredAddress) {
+    throw new Error(`Gmailの送信元として ${MAIL_SENDER_EMAIL} のエイリアス設定が必要です。`);
+  }
+
+  if (senderEmail !== activeUserEmail) {
+    mailOptions.from = MAIL_SENDER_EMAIL;
+  }
+
+  GmailApp.sendEmail(to, subject, body, mailOptions);
 }
 
 function hash_(text) {
