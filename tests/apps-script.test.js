@@ -79,6 +79,9 @@ function loadAppsScript(overrides = {}) {
     `${code}
 globalThis.__testExports = {
   sendMail_,
+  sendConfirmationEmail_,
+  sendClientApplicantListEmail_,
+  testSendClientApplicantListEmail,
   formatStoredTimestamp_,
   parseDate_,
   MAIL_SENDER_EMAIL,
@@ -165,6 +168,91 @@ test("sendMail_ fails clearly when the configured sender alias is missing", () =
     /Gmailの送信元として info@missconnect\.jp のエイリアス設定が必要です。/
   );
   assert.equal(sendEmailCalls.length, 0);
+});
+
+test("sendConfirmationEmail_ sends the applicant confirmation email", () => {
+  const { sendConfirmationEmail_, sendEmailCalls, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME } = loadAppsScript({
+    activeUserEmail: "info@missconnect.jp"
+  });
+
+  sendConfirmationEmail_("talent@example.com", "山田 花子", {
+    jobTitle: "美容商材PR",
+    detailLines: [
+      "案件名：美容商材PR",
+      "報酬：10,000円",
+      "参加可能日程：2026年05月01日 10:00"
+    ]
+  });
+
+  assert.equal(sendEmailCalls.length, 1);
+  assert.equal(sendEmailCalls[0].to, "talent@example.com");
+  assert.equal(sendEmailCalls[0].subject, "【応募確認】美容商材PR");
+  assert.match(sendEmailCalls[0].body, /山田 花子 様/);
+  assert.match(sendEmailCalls[0].body, /このたびはご応募いただき、誠にありがとうございます。/);
+  assert.match(sendEmailCalls[0].body, /参加可能日程：2026年05月01日 10:00/);
+  assert.deepEqual(normalizeForAssertion(sendEmailCalls[0].options), {
+    name: MAIL_SENDER_NAME,
+    replyTo: MAIL_SENDER_EMAIL
+  });
+});
+
+test("sendClientApplicantListEmail_ sends the client applicant list email", () => {
+  const { sendClientApplicantListEmail_, sendEmailCalls, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME } = loadAppsScript({
+    activeUserEmail: "info@missconnect.jp"
+  });
+
+  sendClientApplicantListEmail_(["client@example.com", "sub@example.com"], {
+    title: "美容商材PR",
+    deadlineStr: "2026年05月01日",
+    applicantCount: 2,
+    applicantLines: [
+      [
+        "・山田 花子",
+        "  https://example.com/yamada",
+        "  参加可能日程: 2026年05月03日 10:00"
+      ].join("\n"),
+      [
+        "・佐藤 太郎",
+        "  （URLなし）",
+        "  参加可能日程: （未回答）"
+      ].join("\n")
+    ],
+    formUrl: "https://example.com/model-decision-form"
+  });
+
+  assert.equal(sendEmailCalls.length, 1);
+  assert.equal(sendEmailCalls[0].to, "client@example.com,sub@example.com");
+  assert.equal(sendEmailCalls[0].subject, "【応募者一覧】美容商材PR");
+  assert.match(sendEmailCalls[0].body, /2026年05月01日をもちまして応募受付を終了いたしました。/);
+  assert.match(sendEmailCalls[0].body, /応募者数：2名/);
+  assert.match(sendEmailCalls[0].body, /・山田 花子/);
+  assert.match(sendEmailCalls[0].body, /https:\/\/example\.com\/model-decision-form/);
+  assert.deepEqual(normalizeForAssertion(sendEmailCalls[0].options), {
+    name: MAIL_SENDER_NAME,
+    replyTo: MAIL_SENDER_EMAIL,
+    cc: "kaito.suzuki@missconnect.jp"
+  });
+});
+
+test("testSendClientApplicantListEmail sends only to the active user", () => {
+  const { testSendClientApplicantListEmail, sendEmailCalls, MAIL_SENDER_EMAIL, MAIL_SENDER_NAME } = loadAppsScript({
+    activeUserEmail: "tester@example.com",
+    aliases: ["info@missconnect.jp"]
+  });
+
+  const result = testSendClientApplicantListEmail();
+
+  assert.equal(result, "クライアント向け応募者一覧メールのテスト送信が完了しました: tester@example.com");
+  assert.equal(sendEmailCalls.length, 1);
+  assert.equal(sendEmailCalls[0].to, "tester@example.com");
+  assert.equal(sendEmailCalls[0].subject, "【応募者一覧】テスト案件");
+  assert.match(sendEmailCalls[0].body, /応募者数：2名/);
+  assert.match(sendEmailCalls[0].body, /・テスト応募者A/);
+  assert.deepEqual(normalizeForAssertion(sendEmailCalls[0].options), {
+    name: MAIL_SENDER_NAME,
+    replyTo: MAIL_SENDER_EMAIL,
+    from: MAIL_SENDER_EMAIL
+  });
 });
 
 test("appsscript.json includes the Gmail scope required for alias sending", () => {

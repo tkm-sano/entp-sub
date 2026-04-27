@@ -959,6 +959,27 @@ function sendConfirmationEmail_(to, name, details) {
   sendMail_(to, subject, body);
 }
 
+function testSendConfirmationEmail() {
+  const testRecipient = String(Session.getActiveUser().getEmail() || "").trim();
+  if (!testRecipient) {
+    throw new Error("テスト送信先を取得できませんでした。Apps Scriptの実行ユーザーでログインしてから再実行してください。");
+  }
+
+  sendConfirmationEmail_(testRecipient, "テスト応募者", {
+    jobTitle: "テスト案件",
+    detailLines: [
+      "案件名：テスト案件",
+      "商品名：テスト商品",
+      "報酬：10,000円",
+      "撮影候補日：2026年05月01日 10:00",
+      "参加可能日程：2026年05月01日 10:00",
+      "応募日時：2026年04月27日 12:00"
+    ]
+  });
+
+  return `確認メールのテスト送信が完了しました: ${testRecipient}`;
+}
+
 function buildConfirmationEmailDetailLines_(row, displayRow, columns, appliedAt, selectedShootDates) {
   const lines = [];
   const pushLine = (label, value) => {
@@ -1124,34 +1145,12 @@ function notifyDeadlinePassed() {
       ? ensureModelDecisionFormForJob_(sheet, sheetRowNumber, title, names)
       : { url: "", editUrl: "" };
 
-    const deadlineStr = Utilities.formatDate(deadlineDate, TZ, "yyyy年MM月dd日");
-    const subject = `【応募者一覧】${title}`;
-    const body = [
-      "お世話になっております。MissConnectでございます。",
-      "",
-      `「${title}」につきまして、${deadlineStr}をもちまして応募受付を終了いたしました。`,
-      "応募状況を以下のとおりご共有申し上げます。",
-      "",
-      `応募者数：${names.length}名`,
-      "",
-      "■ 応募者一覧",
-      applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）",
-      "",
-      ...(formInfo.url ? [
-        "起用するモデルが決まりましたら、以下のフォームよりご回答ください。",
-        formInfo.url,
-        ""
-      ] : []),
-      "ご確認のほど、よろしくお願いいたします。",
-      "ご不明な点等がございましたら、お気軽にご連絡ください。",
-      "",
-      "何卒よろしくお願いいたします。",
-      "",
-      "MissConnect"
-    ].join("\n");
-
-    sendMail_(clientEmails.join(","), subject, body, {
-      cc: CLIENT_NOTIFICATION_CC
+    sendClientApplicantListEmail_(clientEmails, {
+      title,
+      deadlineStr: Utilities.formatDate(deadlineDate, TZ, "yyyy年MM月dd日"),
+      applicantCount: names.length,
+      applicantLines,
+      formUrl: formInfo.url
     });
 
     if (formInfo.url) {
@@ -1180,6 +1179,85 @@ function notifyDeadlinePassed() {
 
 function sendDeadlineMorningEmails() {
   notifyDeadlinePassed();
+}
+
+function sendClientApplicantListEmail_(clientEmails, details) {
+  const recipients = Array.isArray(clientEmails)
+    ? clientEmails.join(",")
+    : String(clientEmails || "").trim();
+  const title = String(details?.title || "").trim() || "案件";
+  const deadlineStr = String(details?.deadlineStr || "").trim();
+  const applicantCount = Number(details?.applicantCount || 0);
+  const applicantLines = Array.isArray(details?.applicantLines)
+    ? details.applicantLines.map((line) => String(line || "").trim()).filter(Boolean)
+    : [];
+  const formUrl = String(details?.formUrl || "").trim();
+  const cc = Object.prototype.hasOwnProperty.call(details || {}, "cc")
+    ? String(details.cc || "").trim()
+    : CLIENT_NOTIFICATION_CC;
+
+  const subject = `【応募者一覧】${title}`;
+  const body = [
+    "お世話になっております。MissConnectでございます。",
+    "",
+    deadlineStr
+      ? `「${title}」につきまして、${deadlineStr}をもちまして応募受付を終了いたしました。`
+      : `「${title}」につきまして、応募受付を終了いたしました。`,
+    "応募状況を以下のとおりご共有申し上げます。",
+    "",
+    `応募者数：${applicantCount}名`,
+    "",
+    "■ 応募者一覧",
+    applicantLines.length > 0 ? applicantLines.join("\n") : "（応募者なし）",
+    "",
+    ...(formUrl ? [
+      "起用するモデルが決まりましたら、以下のフォームよりご回答ください。",
+      formUrl,
+      ""
+    ] : []),
+    "ご確認のほど、よろしくお願いいたします。",
+    "ご不明な点等がございましたら、お気軽にご連絡ください。",
+    "",
+    "何卒よろしくお願いいたします。",
+    "",
+    "MissConnect"
+  ].join("\n");
+
+  const options = {};
+  if (cc) {
+    options.cc = cc;
+  }
+
+  sendMail_(recipients, subject, body, options);
+}
+
+function testSendClientApplicantListEmail() {
+  const testRecipient = String(Session.getActiveUser().getEmail() || "").trim();
+  if (!testRecipient) {
+    throw new Error("テスト送信先を取得できませんでした。Apps Scriptの実行ユーザーでログインしてから再実行してください。");
+  }
+
+  sendClientApplicantListEmail_([testRecipient], {
+    title: "テスト案件",
+    deadlineStr: "2026年05月01日",
+    applicantCount: 2,
+    applicantLines: [
+      [
+        "・テスト応募者A",
+        "  https://example.com/talent-a",
+        "  参加可能日程: 2026年05月03日 10:00 / 2026年05月04日 14:00"
+      ].join("\n"),
+      [
+        "・テスト応募者B",
+        "  https://example.com/talent-b",
+        "  参加可能日程: （未回答）"
+      ].join("\n")
+    ],
+    formUrl: "https://example.com/model-decision-form",
+    cc: ""
+  });
+
+  return `クライアント向け応募者一覧メールのテスト送信が完了しました: ${testRecipient}`;
 }
 
 function ensureModelDecisionFormSubmitTrigger_(form) {
